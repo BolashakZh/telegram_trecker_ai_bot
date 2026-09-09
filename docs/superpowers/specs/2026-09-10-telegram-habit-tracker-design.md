@@ -34,16 +34,25 @@ grammY и пишет в Neon Postgres. Отдельного фронта нет:
 и статистика — внутри бота.
 
 ```
-package.json            type: module; deps: grammy, @neondatabase/serverless; dev: vitest
+package.json            type: module; deps: grammy, @neondatabase/serverless; dev: vitest, pglite
 api/bot.js              вебхук: проверка секрета → дедуп update_id → grammY
 api/setup.js            миграции + setWebhook, защищён SETUP_SECRET
-lib/db.js               клиент Neon, доступ к users / trackers / checkins / processed
+lib/config.js           разбор переменных окружения
+lib/db.js               подключение (Neon + ретрай), миграции, «сегодня» в TZ
+lib/users.js            заявки, allow/deny, список участников
+lib/trackers.js         трекеры: добавить / список / архив
+lib/checkins.js         тоггл отметки, состояние за сегодня, дедуп update_id
 lib/stats.js            SQL: сегодня, месяц, серия, пропуски
+lib/text.js             имена, дата по-русски, обрезка до лимита Telegram
 lib/menu.js             сборка inline-клавиатуры трекеров
+lib/bot.js              сборка бота: bot.catch, админ-композер, хендлеры
 lib/handlers/user.js    /start, тапы по трекерам
 lib/handlers/admin.js   доступ, трекеры, /stats
 dev.js                  локальный запуск того же бота на long polling
 ```
+
+Слой данных работает через один интерфейс `q(text, params) → rows`: в проде его
+даёт Neon, в тестах — PGlite (Postgres в WASM, без сети и секретов).
 
 `api/bot.js` — тонкая точка входа. Вся логика в `lib/`, чтобы `stats.js` и тоггл
 тестировались без Telegram и без Vercel.
@@ -187,10 +196,10 @@ CREATE TABLE IF NOT EXISTS processed (
 
 vitest. Тесты пишутся до кода.
 
-- `lib/stats.js` против отдельной тестовой ветки Neon (`DATABASE_URL` тестового
-  окружения): серия при отметке вчера, но не сегодня; разрыв в середине; start
-  позже создания трекера; переход через границу месяца; человек без отметок;
-  архивированный трекер не попадает в выдачу.
+- `lib/stats.js` против PGlite (тот же SQL, что в Neon; дата «сегодня» в тестах
+  фиксируется параметром): серия при отметке вчера, но не сегодня; разрыв в
+  середине; start позже создания трекера; переход через границу месяца; человек
+  без отметок; архивированный трекер не попадает в выдачу.
 - Вычисление «сегодня» на границе суток в заданном `TZ`.
 - Тоггл: два вызова подряд возвращают исходное состояние; повторный `update_id`
   ничего не делает.

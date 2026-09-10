@@ -6,7 +6,13 @@ export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 export async function POST(req: Request): Promise<Response> {
-  const bot = getBot()
-  await bot.init()
-  return handleWebhook(req, { db: getDb(), bot, secret: config.webhookSecret() })
+  return handleWebhook(req, {
+    db: getDb(),
+    bot: async () => {
+      const bot = getBot()
+      await bot.init()
+      return bot
+    },
+    secret: config.webhookSecret(),
+  })
 }

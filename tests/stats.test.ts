@@ -111,11 +111,6 @@ describe('userStats', () => {
     const { db } = await fixture({
       joinedAt: '2026-09-10T20:00:00Z', trackerCreatedAt: '2026-01-01T00:00:00Z',
     })
-    // PGlite по умолчанию наследует таймзону хост-машины, которая может случайно
-    // совпасть с Asia/Almaty и замаскировать баг. В Neon сессия — UTC, поэтому
-    // явно уводим сессионный TimeZone туда же, чтобы тест не зависел от того,
-    // где его запускают.
-    await db.q(`set time zone 'UTC'`)
 
     const [s] = await userStats(db, 7, '2026-09-11')
     expect(s.start_day).toBe('2026-09-11')

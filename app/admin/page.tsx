@@ -19,6 +19,7 @@ export default function AdminPage() {
   const [tab, setTab] = useState<(typeof TABS)[number]['key']>('people')
   const [data, setData] = useState<Bootstrap | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
 
   useEffect(() => {
     window.Telegram?.WebApp?.ready()
@@ -26,52 +27,67 @@ export default function AdminPage() {
     api.bootstrap().then(setData).catch((e: Error) => setError(e.message))
   }, [])
 
-  async function run<T>(action: () => Promise<T>, apply: (res: T) => void) {
+  async function run<T>(action: () => Promise<T>, apply: (res: T) => void): Promise<boolean> {
+    setBusy(true)
     try {
       apply(await action())
+      return true
     } catch (e) {
       alertUser((e as Error).message)
+      return false
+    } finally {
+      setBusy(false)
     }
   }
 
   if (error) {
     return (
-      <main className="p-6 text-center text-sm opacity-70">
+      <main className="min-h-screen bg-white p-6 text-center text-sm text-black/70 dark:bg-black dark:text-white/70">
         Откройте админку через бота — кнопкой «⚙️ Открыть админку».
       </main>
     )
   }
-  if (!data) return <main className="p-6 text-sm opacity-70">Загрузка…</main>
+  if (!data) {
+    return (
+      <main className="min-h-screen bg-white p-6 text-sm text-black/70 dark:bg-black dark:text-white/70">
+        Загрузка…
+      </main>
+    )
+  }
 
   return (
-    <main className="mx-auto max-w-2xl pb-20">
+    <main className="mx-auto min-h-screen max-w-2xl bg-white pb-20 text-black dark:bg-black dark:text-white">
       <div className="p-3">
         {tab === 'people' && (
           <People
             data={data}
+            busy={busy}
             onMembership={(userId, groupId, on) =>
               run(() => api.users({ action: 'membership', userId, groupId, on }),
-                  (r) => setData({ ...data, users: r.users }))}
+                  (r) => setData((prev) => (prev ? { ...prev, users: r.users } : prev)))}
             onRename={(userId, displayName) =>
               run(() => api.users({ action: 'rename', userId, displayName }),
-                  (r) => setData({ ...data, users: r.users }))}
+                  (r) => setData((prev) => (prev ? { ...prev, users: r.users } : prev)))}
             onUnlock={(userId) =>
               run(() => api.users({ action: 'unlockName', userId }),
-                  (r) => setData({ ...data, users: r.users }))}
+                  (r) => setData((prev) => (prev ? { ...prev, users: r.users } : prev)))}
           />
         )}
         {tab === 'groups' && (
           <Groups
             data={data}
+            busy={busy}
             onAction={(body) =>
-              run(() => api.groups(body), (r) => setData({ ...data, groups: r.groups, trackers: r.trackers }))}
+              run(() => api.groups(body),
+                  (r) => setData((prev) => (prev ? { ...prev, groups: r.groups, trackers: r.trackers } : prev)))}
           />
         )}
         {tab === 'trackers' && (
           <Trackers
             data={data}
+            busy={busy}
             onAction={(body) =>
-              run(() => api.trackers(body), (r) => setData({ ...data, trackers: r.trackers }))}
+              run(() => api.trackers(body), (r) => setData((prev) => (prev ? { ...prev, trackers: r.trackers } : prev)))}
           />
         )}
         {tab === 'dash' && <Dashboard groups={data.groups} />}

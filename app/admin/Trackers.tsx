@@ -3,8 +3,8 @@
 import { useState } from 'react'
 import type { Bootstrap } from '@/lib/admin.ts'
 
-export default function Trackers(props: { data: Bootstrap; onAction: (body: object) => void }) {
-  const { data } = props
+export default function Trackers(props: { data: Bootstrap; busy: boolean; onAction: (body: object) => Promise<boolean> }) {
+  const { data, busy } = props
   const [form, setForm] = useState({
     title: '', description: '', kind: 'check' as 'check' | 'number', target: '10', unit: '',
   })
@@ -27,7 +27,7 @@ export default function Trackers(props: { data: Bootstrap; onAction: (body: obje
           value={form.description}
           onChange={(e) => setForm({ ...form, description: e.target.value })}
         />
-        <div className="flex gap-2 text-sm">
+        <div className="flex flex-wrap gap-2 text-sm">
           <select
             className="rounded border border-black/20 px-2 py-1 dark:border-white/20 dark:bg-transparent"
             value={form.kind}
@@ -53,13 +53,14 @@ export default function Trackers(props: { data: Bootstrap; onAction: (body: obje
             </>
           )}
           <button
-            className="ml-auto rounded bg-blue-600 px-3 text-white"
-            onClick={() => {
-              props.onAction({
+            className="ml-auto rounded bg-blue-600 px-3 text-white disabled:opacity-60 disabled:cursor-progress"
+            disabled={busy}
+            onClick={async () => {
+              const ok = await props.onAction({
                 action: 'create', title: form.title, description: form.description,
                 kind: form.kind, target: Number(form.target), unit: form.unit,
               })
-              setForm({ title: '', description: '', kind: 'check', target: '10', unit: '' })
+              if (ok) setForm({ title: '', description: '', kind: 'check', target: '10', unit: '' })
             }}
           >
             Создать
@@ -71,7 +72,11 @@ export default function Trackers(props: { data: Bootstrap; onAction: (body: obje
         <section key={t.id} className="rounded-xl border border-black/10 p-3 text-sm dark:border-white/15">
           <div className="flex items-center justify-between">
             <b>{t.title}</b>
-            <button className="text-xs opacity-60" onClick={() => props.onAction({ action: 'archive', trackerId: t.id })}>
+            <button
+              className="text-xs opacity-60 disabled:opacity-30 disabled:cursor-progress"
+              disabled={busy}
+              onClick={() => props.onAction({ action: 'archive', trackerId: t.id })}
+            >
               архивировать
             </button>
           </div>

@@ -5,11 +5,12 @@ import type { Bootstrap } from '@/lib/admin.ts'
 
 export default function People(props: {
   data: Bootstrap
+  busy: boolean
   onMembership: (userId: number, groupId: number, on: boolean) => void
-  onRename: (userId: number, displayName: string) => void
+  onRename: (userId: number, displayName: string) => Promise<boolean>
   onUnlock: (userId: number) => void
 }) {
-  const { data } = props
+  const { data, busy } = props
   const [editing, setEditing] = useState<number | null>(null)
   const [draft, setDraft] = useState('')
 
@@ -28,7 +29,14 @@ export default function People(props: {
                     onChange={(e) => setDraft(e.target.value)}
                     autoFocus
                   />
-                  <button className="text-sm" onClick={() => { props.onRename(u.id, draft); setEditing(null) }}>
+                  <button
+                    className="text-sm disabled:opacity-60 disabled:cursor-progress"
+                    disabled={busy}
+                    onClick={async () => {
+                      const ok = await props.onRename(u.id, draft)
+                      if (ok) setEditing(null)
+                    }}
+                  >
                     Сохранить
                   </button>
                 </>
@@ -39,7 +47,8 @@ export default function People(props: {
                     {isNew && <em className="ml-2 rounded bg-amber-200 px-1 text-xs not-italic text-amber-900">новый</em>}
                   </span>
                   <button
-                    className="text-sm opacity-60"
+                    className="text-sm opacity-60 disabled:opacity-30 disabled:cursor-progress"
+                    disabled={busy}
                     onClick={() => { setEditing(u.id); setDraft(u.display_name ?? '') }}
                   >
                     ✏️
@@ -58,8 +67,9 @@ export default function People(props: {
                 return (
                   <button
                     key={g.id}
+                    disabled={busy}
                     onClick={() => props.onMembership(u.id, g.id, !on)}
-                    className={`rounded-full border px-2 py-1 text-xs ${
+                    className={`rounded-full border px-2 py-1 text-xs disabled:opacity-60 disabled:cursor-progress ${
                       on ? 'border-transparent bg-blue-600 text-white' : 'border-black/20 opacity-70 dark:border-white/25'
                     }`}
                   >
@@ -71,7 +81,7 @@ export default function People(props: {
 
             {u.name_locked && (
               <label className="mt-2 flex items-center gap-2 text-xs opacity-70">
-                <input type="checkbox" onChange={() => props.onUnlock(u.id)} />
+                <input type="checkbox" disabled={busy} onChange={() => props.onUnlock(u.id)} />
                 разрешить менять имя самому
               </label>
             )}

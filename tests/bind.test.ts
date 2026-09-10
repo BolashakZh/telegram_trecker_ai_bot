@@ -25,10 +25,13 @@ async function harness() {
 }
 
 function groupMessage(text: string, fromId: number, chatId = -100500): Update {
+  const entities = text.startsWith('/')
+    ? [{ type: 'bot_command' as const, offset: 0, length: text.split(' ')[0].length }]
+    : undefined
   return {
     update_id: Math.floor(Math.random() * 1e9),
     message: {
-      message_id: 1, date: 0, text,
+      message_id: 1, date: 0, text, entities,
       chat: { id: chatId, type: 'supergroup' as const, title: 'Утро' },
       from: { id: fromId, is_bot: false, first_name: 'Админ' },
     },

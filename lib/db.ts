@@ -46,6 +46,7 @@ create table if not exists groups (
 create table if not exists trackers (
   id          serial primary key,
   title       text not null,
+  description text,
   kind        text not null check (kind in ('check','number')),
   target      numeric not null default 1 check (target > 0),
   unit        text,
@@ -89,6 +90,7 @@ create table if not exists sent_log (
 );
 create index if not exists entries_day_idx on entries (day);
 create index if not exists memberships_group_idx on memberships (group_id);
+alter table trackers add column if not exists description text;
 `
 
 export async function migrate(db: Db): Promise<void> {

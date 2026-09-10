@@ -5,18 +5,22 @@ export type TrackerKind = 'check' | 'number'
 export type Tracker = {
   id: number
   title: string
+  description: string | null
   kind: TrackerKind
   target: number
   unit: string | null
   archived_at: string | null
 }
 
-const COLS = `id, title, kind, target::float8 as target, unit, archived_at::text as archived_at`
+const COLS = `id, title, description, kind, target::float8 as target, unit, archived_at::text as archived_at`
+const COLS_T = `t.id, t.title, t.description, t.kind, t.target::float8 as target, t.unit,
+                t.archived_at::text as archived_at`
 
 function toTracker(row: Record<string, unknown>): Tracker {
   return {
     id: Number(row.id),
     title: row.title as string,
+    description: (row.description as string) ?? null,
     kind: row.kind as TrackerKind,
     target: Number(row.target),
     unit: (row.unit as string) ?? null,
@@ -26,12 +30,18 @@ function toTracker(row: Record<string, unknown>): Tracker {
 
 export async function createTracker(
   db: Db,
-  t: { title: string; kind: TrackerKind; target?: number; unit?: string | null },
+  t: { title: string; kind: TrackerKind; target?: number; unit?: string | null; description?: string | null },
 ): Promise<Tracker> {
   const [row] = await db.q(
-    `insert into trackers (title, kind, target, unit) values ($1, $2, $3, $4)
+    `insert into trackers (title, description, kind, target, unit) values ($1, $2, $3, $4, $5)
      returning ${COLS}`,
-    [t.title, t.kind, t.kind === 'check' ? 1 : (t.target ?? 1), t.kind === 'check' ? null : (t.unit ?? null)],
+    [
+      t.title,
+      t.description ?? null,
+      t.kind,
+      t.kind === 'check' ? 1 : (t.target ?? 1),
+      t.kind === 'check' ? null : (t.unit ?? null),
+    ],
   )
   return toTracker(row)
 }
@@ -39,10 +49,12 @@ export async function createTracker(
 export async function updateTracker(
   db: Db,
   id: number,
-  t: { title: string; target: number; unit: string | null },
+  t: { title: string; target: number; unit: string | null; description: string | null },
 ): Promise<void> {
-  await db.q(`update trackers set title = $2, target = $3, unit = $4 where id = $1`,
-    [id, t.title, t.target, t.unit])
+  await db.q(
+    `update trackers set title = $2, description = $3, target = $4, unit = $5 where id = $1`,
+    [id, t.title, t.description, t.target, t.unit],
+  )
 }
 
 export async function archiveTracker(db: Db, id: number): Promise<void> {
@@ -55,8 +67,7 @@ export async function listTrackers(
 ): Promise<(Tracker & { group_ids: number[] })[]> {
   const where = opts.includeArchived ? '' : 'where t.archived_at is null'
   const rows = await db.q(
-    `select t.id, t.title, t.kind, t.target::float8 as target, t.unit,
-            t.archived_at::text as archived_at,
+    `select ${COLS_T},
             coalesce(array_agg(gt.group_id order by gt.group_id)
                      filter (where gt.group_id is not null), '{}') as group_ids
      from trackers t left join group_trackers gt on gt.tracker_id = t.id
@@ -83,8 +94,7 @@ export async function setGroupTracker(
 
 export async function groupTrackers(db: Db, groupId: number): Promise<Tracker[]> {
   const rows = await db.q(
-    `select t.id, t.title, t.kind, t.target::float8 as target, t.unit,
-            t.archived_at::text as archived_at
+    `select ${COLS_T}
      from group_trackers gt join trackers t on t.id = gt.tracker_id
      where gt.group_id = $1 and t.archived_at is null
      order by t.id`,
@@ -96,8 +106,7 @@ export async function groupTrackers(db: Db, groupId: number): Promise<Tracker[]>
 export async function activeTrackersForUser(db: Db, userId: number): Promise<Tracker[]> {
   const rows = await db.q(
     `select distinct on (t.id)
-            t.id, t.title, t.kind, t.target::float8 as target, t.unit,
-            t.archived_at::text as archived_at
+            ${COLS_T}
      from memberships m
      join groups g on g.id = m.group_id and g.archived_at is null
      join group_trackers gt on gt.group_id = g.id

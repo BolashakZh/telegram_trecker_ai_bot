@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { archiveGroup, createGroup, setMembership } from '../lib/groups.ts'
 import {
   activeTrackersForUser, archiveTracker, createTracker, listTrackers, setGroupTracker,
+  updateTracker,
 } from '../lib/trackers.ts'
 import { upsertFromTelegram } from '../lib/users.ts'
 import { testDb } from './helpers.ts'
@@ -98,5 +99,41 @@ describe('listTrackers', () => {
 
     const [row] = await listTrackers(db)
     expect(row.group_ids).toEqual([a.id, b.id])
+  })
+})
+
+describe('описание трекера', () => {
+  it('сохраняется при создании и приезжает во всех выборках', async () => {
+    const db = await testDb()
+    await upsertFromTelegram(db, { id: 7 })
+    const g = await createGroup(db, 'Утро')
+    const book = await createTracker(db, {
+      title: 'Книга', kind: 'number', target: 10, unit: 'стр.',
+      description: 'читаем про психологию, 10 страниц в день',
+    })
+    await setGroupTracker(db, g.id, book.id, true)
+    await setMembership(db, 7, g.id, true)
+
+    expect(book.description).toBe('читаем про психологию, 10 страниц в день')
+    expect((await listTrackers(db))[0].description).toBe('читаем про психологию, 10 страниц в день')
+    expect((await activeTrackersForUser(db, 7))[0].description).toBe('читаем про психологию, 10 страниц в день')
+  })
+
+  it('необязательно: без описания приезжает null', async () => {
+    const db = await testDb()
+    const t = await createTracker(db, { title: 'Зарядка', kind: 'check' })
+    expect(t.description).toBeNull()
+  })
+
+  it('updateTracker меняет описание, включая стирание в null', async () => {
+    const db = await testDb()
+    const t = await createTracker(db, {
+      title: 'Книга', kind: 'number', target: 10, unit: 'стр.', description: 'старое',
+    })
+    await updateTracker(db, t.id, { title: 'Книга', target: 10, unit: 'стр.', description: 'новое' })
+    expect((await listTrackers(db))[0].description).toBe('новое')
+
+    await updateTracker(db, t.id, { title: 'Книга', target: 10, unit: 'стр.', description: null })
+    expect((await listTrackers(db))[0].description).toBeNull()
   })
 })

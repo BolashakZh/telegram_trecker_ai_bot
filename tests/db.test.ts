@@ -16,6 +16,18 @@ describe('migrate', () => {
       'pending_input', 'processed', 'sent_log', 'trackers', 'users',
     ])
   })
+
+  it('добавляет колонку description в уже созданную таблицу trackers', async () => {
+    const db = await testDb()
+    await db.q(`alter table trackers drop column description`)
+    await migrate(db)
+
+    const rows = await db.q(
+      `select column_name from information_schema.columns
+       where table_name = 'trackers' and column_name = 'description'`,
+    )
+    expect(rows).toHaveLength(1)
+  })
 })
 
 describe('today / dayAt', () => {

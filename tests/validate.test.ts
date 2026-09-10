@@ -1,7 +1,15 @@
 import { describe, expect, it } from 'vitest'
-import { BadRequest, id, title, trackerInput } from '../lib/validate.ts'
+import { BadRequest, flag, id, title, trackerInput } from '../lib/validate.ts'
 
 describe('validate', () => {
+  it('flag принимает только boolean', () => {
+    expect(flag(true)).toBe(true)
+    expect(flag(false)).toBe(false)
+    expect(() => flag('true')).toThrow(BadRequest)
+    expect(() => flag(1)).toThrow(BadRequest)
+    expect(() => flag(undefined)).toThrow(BadRequest)
+  })
+
   it('title чистит и проверяет длину', () => {
     expect(title('  Утро  ')).toBe('Утро')
     expect(() => title('')).toThrow(BadRequest)

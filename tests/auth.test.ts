@@ -38,6 +38,20 @@ describe('verifyInitData', () => {
     const data = signInitData({ id: 99 }, NOW - 60)
     expect(verifyInitData(data, '42:OTHER', { now: NOW })).toBeNull()
   })
+
+  it('отвергает initData без поля hash', () => {
+    const params = new URLSearchParams({
+      auth_date: String(NOW - 60),
+      query_id: 'AAA',
+      user: JSON.stringify({ id: 99 }),
+    })
+    expect(verifyInitData(params.toString(), TOKEN, { now: NOW })).toBeNull()
+  })
+
+  it('отвергает hash из недопустимых hex-символов, не бросая исключение', () => {
+    const data = signInitData({ id: 99 }, NOW - 60).replace(/hash=[0-9a-f]+/, 'hash=zz')
+    expect(verifyInitData(data, TOKEN, { now: NOW })).toBeNull()
+  })
 })
 
 describe('requireAdmin', () => {

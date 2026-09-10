@@ -15,6 +15,9 @@ export function verifyInitData(
   if (!hash) return null
   params.delete('hash')
 
+  // Сортируются уже готовые строки "key=value", а не ключи сами по себе. Для нынешнего
+  // набора полей Telegram (auth_date, query_id, user, ...) это эквивалентно сортировке по
+  // ключу, т.к. среди них нет ключа, являющегося префиксом другого.
   const dcs = [...params.entries()].map(([k, v]) => `${k}=${v}`).sort().join('\n')
   const secret = crypto.createHmac('sha256', 'WebAppData').update(botToken).digest()
   const calc = crypto.createHmac('sha256', secret).update(dcs).digest('hex')

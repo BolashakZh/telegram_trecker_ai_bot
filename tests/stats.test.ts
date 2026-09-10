@@ -104,4 +104,21 @@ describe('userStats', () => {
     expect(s.sum_week).toBe(16)
     expect(s.expected_week).toBe(4)  // пн–чт
   })
+
+  it('start_day считается в часовом поясе проекта, а не в UTC сессии', async () => {
+    // 20:00 UTC 10 сентября — это уже 01:00 11 сентября в Asia/Almaty (UTC+5).
+    // Человека нельзя считать вступившим 10-го: он вступил по-местному 11-го.
+    const { db } = await fixture({
+      joinedAt: '2026-09-10T20:00:00Z', trackerCreatedAt: '2026-01-01T00:00:00Z',
+    })
+    // PGlite по умолчанию наследует таймзону хост-машины, которая может случайно
+    // совпасть с Asia/Almaty и замаскировать баг. В Neon сессия — UTC, поэтому
+    // явно уводим сессионный TimeZone туда же, чтобы тест не зависел от того,
+    // где его запускают.
+    await db.q(`set time zone 'UTC'`)
+
+    const [s] = await userStats(db, 7, '2026-09-11')
+    expect(s.start_day).toBe('2026-09-11')
+    expect(s.expected_week).toBe(1)
+  })
 })

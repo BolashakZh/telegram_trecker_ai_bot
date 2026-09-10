@@ -26,6 +26,9 @@ export function monthStart(day: string): string {
 
 // pair       — начало отсчёта пары (человек, трекер): минимум по группам
 //              от максимума (joined_at, linked_at, tracker.created_at) — §4 спеки.
+//              Момент приводится к дате в таймзоне проекта ($5 = db.tz), той же,
+//              что и «сегодня» в lib/db.ts — иначе сессионный TimeZone (в Neon это
+//              UTC) может сдвинуть дату вступления на сутки против местного времени.
 // done       — дни этой пары, где value >= target, не раньше start_day и не позже today.
 // streak_*   — «острова» подряд идущих выполненных дней (day - row_number() над
 //              отсортированными днями даёт одно и то же значение внутри острова);
@@ -35,7 +38,7 @@ const SQL = `
 with pair as (
   select t.id as tracker_id, t.title, t.description, t.kind,
          t.target::float8 as target, t.unit,
-         min(greatest(m.joined_at, gt.linked_at, t.created_at))::date as start_day
+         min((greatest(m.joined_at, gt.linked_at, t.created_at) at time zone $5)::date) as start_day
   from memberships m
   join groups g on g.id = m.group_id and g.archived_at is null
   join group_trackers gt on gt.group_id = g.id
@@ -94,7 +97,7 @@ order by p.tracker_id
 `
 
 export async function userStats(db: Db, userId: number, today: string): Promise<TrackerStats[]> {
-  const rows = await db.q(SQL, [userId, today, weekStart(today), monthStart(today)])
+  const rows = await db.q(SQL, [userId, today, weekStart(today), monthStart(today), db.tz])
   return rows.map((r) => ({
     tracker: {
       id: Number(r.tracker_id),

@@ -50,7 +50,7 @@ export function infoScreen(trackers: Tracker[]): string {
   if (trackers.length === 0) return 'Пока нет трекеров.'
 
   const lines = trackers.map((t) => {
-    const goal = t.kind === 'number' ? ` (цель ${num(t.target)} ${t.unit ?? ''})`.trimEnd() : ''
+    const goal = t.kind === 'number' ? ` (цель ${num(t.target)}${t.unit ? ` ${t.unit}` : ''})` : ''
     return t.description
       ? `• ${t.title} — ${t.description}${goal}`
       : `• ${t.title}${goal}`

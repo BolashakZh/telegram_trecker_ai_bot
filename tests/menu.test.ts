@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { infoScreen, mainScreen, statsScreen } from '../lib/menu.ts'
+import { groupScreen, groupsKeyboard, infoScreen, mainScreen, statsScreen } from '../lib/menu.ts'
+import type { Group } from '../lib/groups.ts'
+import type { GroupReport } from '../lib/group-stats.ts'
 import type { Tracker } from '../lib/trackers.ts'
 
 const check: Tracker = {
@@ -47,6 +49,17 @@ describe('infoScreen', () => {
   it('без трекеров объясняет, а не молчит', () => {
     expect(infoScreen([])).toContain('Пока нет трекеров')
   })
+
+  it('числовой трекер без единицы не имеет лишний пробел', () => {
+    const noUnit: Tracker = {
+      id: 3, title: 'Подходы', description: null,
+      kind: 'number', target: 5, unit: null, archived_at: null,
+    }
+    const text = infoScreen([noUnit])
+    expect(text).toContain('Подходы')
+    expect(text).toContain('цель 5)')
+    expect(text).not.toMatch(/цель 5 \)/)
+  })
 })
 
 describe('statsScreen', () => {
@@ -61,5 +74,75 @@ describe('statsScreen', () => {
     expect(text).toContain('Страницы')
     expect(text).toContain('3/7')
     expect(text).toContain('47 стр.')
+  })
+})
+
+describe('groupScreen', () => {
+  it('показывает сводку с участниками, бары, проценты, и информацию о невыполненных', () => {
+    const report: GroupReport = {
+      group_id: 1,
+      title: 'Друзья',
+      from: '2026-09-07',
+      to: '2026-09-13',
+      members: [
+        { user_id: 10, name: 'Айгуль', done: 7, expected: 7, percent: 100 },
+        { user_id: 20, name: 'Марат', done: 5, expected: 7, percent: 71 },
+        { user_id: 30, name: 'Юра', done: 3, expected: 7, percent: 43 },
+      ],
+      trackers: [],
+      days: [],
+      percent: 71,
+    }
+    const missing = [{ name: 'Юра', titles: ['Зарядка', 'Страницы'] }]
+    const text = groupScreen(report, 10, missing)
+
+    expect(text).toContain('Группа «Друзья»')
+    expect(text).toContain('7–13 сентября')
+    expect(text).toContain('Вы')
+    expect(text).not.toContain('Айгуль')
+    expect(text).toContain('Марат')
+    expect(text).toContain('100%')
+    expect(text).toContain('71%')
+    expect(text).toContain('43%')
+    expect(text).toContain('Сегодня не отметились')
+    expect(text).toContain('Юра')
+    expect(text).toContain('Зарядка, Страницы')
+  })
+
+  it('при пустом списке невыполненных показывает "Сегодня отметились все"', () => {
+    const report: GroupReport = {
+      group_id: 1,
+      title: 'Тесты',
+      from: '2026-09-07',
+      to: '2026-09-13',
+      members: [
+        { user_id: 10, name: 'Айгуль', done: 7, expected: 7, percent: 100 },
+        { user_id: 20, name: 'Марат', done: 7, expected: 7, percent: 100 },
+      ],
+      trackers: [],
+      days: [],
+      percent: 100,
+    }
+    const text = groupScreen(report, 10, [])
+
+    expect(text).toContain('Сегодня отметились все')
+    expect(text).not.toContain('Сегодня не отметились')
+  })
+})
+
+describe('groupsKeyboard', () => {
+  it('строит клавиатуру из списка групп с нужным префиксом', () => {
+    const groups: Group[] = [
+      { id: 1, title: 'Друзья', chat_id: null, archived_at: null },
+      { id: 2, title: 'Семья', chat_id: null, archived_at: null },
+    ]
+    const keyboard = groupsKeyboard(groups, 'g:')
+
+    expect(keyboard.inline_keyboard).toHaveLength(2)
+    expect(keyboard.inline_keyboard[0]).toHaveLength(1)
+    expect(keyboard.inline_keyboard[0][0].text).toBe('Друзья')
+    expect((keyboard.inline_keyboard[0][0] as { callback_data: string }).callback_data).toBe('g:1')
+    expect(keyboard.inline_keyboard[1][0].text).toBe('Семья')
+    expect((keyboard.inline_keyboard[1][0] as { callback_data: string }).callback_data).toBe('g:2')
   })
 })

@@ -134,10 +134,20 @@ export function registerUser(bot: Bot, deps: BotDeps): void {
     if (data === 'back') {
       await ctx.answerCallbackQuery()
       await showMain(ctx, deps, { edit: true })
+      return
     }
+
+    // Неизвестный callback_data (например, кнопка с устаревшего меню) —
+    // без ответа у человека крутится спиннер на кнопке.
+    await ctx.answerCallbackQuery()
   })
 
   bot.on('message:text', async (ctx) => {
+    // Privacy mode Telegram не отсекает ответы на сообщения бота в группе
+    // (в т.ч. на воскресный отчёт) — без этой проверки такой ответ регистрирует
+    // отвечающего как нового участника и открывает ему главное меню в чате группы.
+    if (ctx.chat.type !== 'private') return
+
     const tg = ctx.from
     const user = await upsertFromTelegram(deps.db, {
       id: tg.id, username: tg.username, first_name: tg.first_name,

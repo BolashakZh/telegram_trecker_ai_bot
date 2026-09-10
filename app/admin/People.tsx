@@ -14,6 +14,14 @@ export default function People(props: {
   const [editing, setEditing] = useState<number | null>(null)
   const [draft, setDraft] = useState('')
 
+  if (data.users.length === 0) {
+    return (
+      <p className="p-3 text-center text-sm opacity-60">
+        Пока никто не написал боту — список появится, когда кто-нибудь нажмёт /start.
+      </p>
+    )
+  }
+
   return (
     <div className="space-y-3">
       {data.users.map((u) => {

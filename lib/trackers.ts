@@ -92,17 +92,6 @@ export async function setGroupTracker(
   }
 }
 
-export async function groupTrackers(db: Db, groupId: number): Promise<Tracker[]> {
-  const rows = await db.q(
-    `select ${COLS_T}
-     from group_trackers gt join trackers t on t.id = gt.tracker_id
-     where gt.group_id = $1 and t.archived_at is null
-     order by t.id`,
-    [groupId],
-  )
-  return rows.map(toTracker)
-}
-
 export async function activeTrackersForUser(db: Db, userId: number): Promise<Tracker[]> {
   const rows = await db.q(
     `select distinct on (t.id)

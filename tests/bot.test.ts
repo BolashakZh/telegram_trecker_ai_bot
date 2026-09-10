@@ -246,3 +246,37 @@ describe('групповая сводка', () => {
     expect(text).toMatch(/\d+%/)
   })
 })
+
+describe('сообщения в группе', () => {
+  it('обычный текст (например, ответ на воскресный отчёт) в чате группы игнорируется', async () => {
+    const { db, bot, calls } = await harness()
+
+    const groupText: Update = {
+      update_id: 1,
+      message: {
+        message_id: 1, date: 0, text: 'Айгуль Смагулова',
+        chat: { id: -100500, type: 'supergroup' as const, title: 'Утро' },
+        from: { id: 777, is_bot: false, first_name: 'Случайный' },
+      },
+    } as Update
+
+    await bot.handleUpdate(groupText)
+
+    // Ни ответа, ни регистрации участника, ни уведомления админам.
+    expect(calls).toHaveLength(0)
+    expect(await getUser(db, 777)).toBeNull()
+  })
+})
+
+describe('неизвестный callback_data', () => {
+  it('закрывает спиннер ответом без текста', async () => {
+    const { bot, calls } = await harness()
+    await bot.handleUpdate(message('/start'))
+    await bot.handleUpdate(message('Айгуль Смагулова'))
+    calls.length = 0
+
+    await bot.handleUpdate(tap('legacy:unknown'))
+    const answer = calls.find((c) => c.method === 'answerCallbackQuery')
+    expect(answer).toBeTruthy()
+  })
+})

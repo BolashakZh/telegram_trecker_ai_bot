@@ -6,7 +6,7 @@ import { groupReport, usersWithUnfinished, type GroupReport } from './group-stat
 import { mainScreen } from './menu.ts'
 import { weekStart } from './stats.ts'
 import { activeTrackersForUser } from './trackers.ts'
-import { bar, formatRange, num, padRight } from './text.ts'
+import { bar, clip, esc, formatRange, num, padRight } from './text.ts'
 
 export type Sender = {
   send(chatId: number, text: string, keyboard?: InlineKeyboardMarkup): Promise<void>
@@ -49,22 +49,35 @@ export async function sendReminders(db: Db, sender: Sender, today: string): Prom
 
 export function weeklyText(report: GroupReport): string {
   const width = Math.max(...report.members.map((m) => m.name.length), 6) + 1
+  // Как и в groupScreen: ширина считается по неэкранированному имени, строка
+  // экранируется целиком после padRight.
   const rows = report.members
     .slice()
     .sort((a, b) => b.percent - a.percent)
-    .map((m) => `${padRight(m.name, width)}${bar(m.percent)} ${String(m.percent).padStart(3)}%`)
+    .map((m) => esc(`${padRight(m.name, width)}${bar(m.percent)} ${String(m.percent).padStart(3)}%`))
 
   const numbers = report.trackers
     .filter((t) => t.kind === 'number' && t.sum > 0)
-    .map((t) => `${t.title}: ${num(t.sum)} ${t.unit ?? ''} за неделю`)
+    .map((t) => `${esc(t.title)}: ${num(t.sum)} ${esc(t.unit ?? '')} за неделю`)
 
-  return [
-    `🏁 <b>${report.title}</b> · итоги недели ${formatRange(report.from, report.to)}`,
-    `<pre>${rows.join('\n')}</pre>`,
+  // Тело <pre> режем отдельно от остального: если воскресный отчёт разросся
+  // (много участников), обрезка не должна оставить незакрытый тег — это единственная
+  // отправка за неделю, вторая попытка при ошибке уже не случится (идемпотентность
+  // sent_log). Остальные строки режем отдельным бюджетом, оба всегда укладываются
+  // в общий лимит, так что финальный clip — лишь подстраховка снаружи <pre>.
+  const pre = `<pre>${clip(rows.join('\n'), 2800)}</pre>`
+  const restLines = [
     `Группа в среднем: ${report.percent}%`,
-    report.trackers.map((t) => `${t.title} ${t.percent}%`).join(' · '),
+    report.trackers.map((t) => `${esc(t.title)} ${t.percent}%`).join(' · '),
     ...numbers,
-  ].filter(Boolean).join('\n')
+  ].filter(Boolean)
+  const rest = clip(restLines.join('\n'), 1000)
+
+  return clip([
+    `🏁 <b>${esc(report.title)}</b> · итоги недели ${formatRange(report.from, report.to)}`,
+    pre,
+    rest,
+  ].filter(Boolean).join('\n'))
 }
 
 export async function sendWeekly(db: Db, sender: Sender, today: string): Promise<number> {

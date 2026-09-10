@@ -102,4 +102,44 @@ describe('weeklyText', () => {
     expect(text).toContain('Айгуль')
     expect(text).toContain('Группа в среднем')
   })
+
+  it('экранирует HTML в названии группы и именах участников', async () => {
+    const db = await testDb()
+    await upsertFromTelegram(db, { id: 1, first_name: 'Вася <b>крутой</b>' })
+    const g = await createGroup(db, 'Утро <script>')
+    const charge = await createTracker(db, { title: 'Медитация < 10', kind: 'check' })
+    await setGroupTracker(db, g.id, charge.id, true)
+    await setMembership(db, 1, g.id, true)
+    await db.q(`update memberships set joined_at = '2026-09-01T00:00:00Z'`)
+    await db.q(`update group_trackers set linked_at = '2026-09-01T00:00:00Z'`)
+    await db.q(`update trackers set created_at = '2026-01-01T00:00:00Z'`)
+
+    const text = weeklyText(await groupReport(db, g.id, '2026-09-07', TODAY))
+    expect(text).not.toContain('<script>')
+    expect(text).not.toContain('<b>крутой</b>')
+    expect(text).not.toContain('< 10')
+    expect(text).toContain('Утро &lt;script&gt;')
+    expect(text).toContain('Вася &lt;b&gt;крутой&lt;/b&gt;')
+    expect(text).toContain('Медитация &lt; 10')
+  })
+
+  it('режет длинный список участников по лимиту 4096, сохраняя парные теги <pre>', async () => {
+    const db = await testDb()
+    const g = await createGroup(db, 'Большая группа')
+    const charge = await createTracker(db, { title: 'Зарядка', kind: 'check' })
+    await setGroupTracker(db, g.id, charge.id, true)
+    for (let i = 1; i <= 300; i += 1) {
+      await upsertFromTelegram(db, { id: i, first_name: `Участник номер ${i}` })
+      await setMembership(db, i, g.id, true)
+    }
+    await db.q(`update memberships set joined_at = '2026-09-01T00:00:00Z'`)
+    await db.q(`update group_trackers set linked_at = '2026-09-01T00:00:00Z'`)
+    await db.q(`update trackers set created_at = '2026-01-01T00:00:00Z'`)
+
+    const text = weeklyText(await groupReport(db, g.id, '2026-09-07', TODAY))
+    expect(text.length).toBeLessThanOrEqual(4096)
+    expect(text.split('<pre>')).toHaveLength(2)
+    expect(text.split('</pre>')).toHaveLength(2)
+    expect(text.indexOf('<pre>')).toBeLessThan(text.indexOf('</pre>'))
+  })
 })

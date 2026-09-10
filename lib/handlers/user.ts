@@ -34,11 +34,19 @@ async function notifyAdmins(ctx: Context, deps: BotDeps, name: string): Promise<
   const u = ctx.from!
   const text = `Новый участник: ${name} (@${u.username ?? '—'}, ${u.id})\nНазначьте ему группы.`
   for (const adminId of deps.adminIds) {
-    await ctx.api.sendMessage(adminId, text, {
-      reply_markup: {
-        inline_keyboard: [[{ text: '⚙️ Открыть админку', web_app: { url: `${deps.appUrl}/admin` } }]],
-      },
-    })
+    // Изолируем рассылку: если один админ заблокировал бота, sendMessage бросит
+    // исключение — не даём ему прервать цикл (остальные админы должны узнать)
+    // и не даём ему всплыть в bot.catch (человек, который только что назвал
+    // себя, не должен увидеть «Что-то пошло не так»).
+    try {
+      await ctx.api.sendMessage(adminId, text, {
+        reply_markup: {
+          inline_keyboard: [[{ text: '⚙️ Открыть админку', web_app: { url: `${deps.appUrl}/admin` } }]],
+        },
+      })
+    } catch (err) {
+      console.error('notifyAdmins: failed to notify', adminId, err)
+    }
   }
 }
 

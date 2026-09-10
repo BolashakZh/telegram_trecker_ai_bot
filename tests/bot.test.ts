@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest'
 import type { Update } from 'grammy/types'
 import { createBot } from '../lib/bot.ts'
 import { createGroup, setMembership } from '../lib/groups.ts'
-import { createTracker, setGroupTracker } from '../lib/trackers.ts'
-import { getUser } from '../lib/users.ts'
+import { archiveTracker, createTracker, setGroupTracker } from '../lib/trackers.ts'
+import { getUser, setDisplayName, upsertFromTelegram } from '../lib/users.ts'
 import { testDb } from './helpers.ts'
 
 const BOT_INFO = {
@@ -110,6 +110,7 @@ describe('отметки', () => {
     const { db, bot, calls, pages } = await ready()
     await bot.handleUpdate(tap(`t:${pages.id}`))
     expect(calls.at(-1)?.payload.text).toContain('число')
+    expect(calls.at(-1)?.payload.reply_markup).toEqual({ force_reply: true })
 
     await bot.handleUpdate(message('12'))
     const [row] = await db.q(`select value::float8 as value from entries where tracker_id = $1`, [pages.id])
@@ -148,5 +149,100 @@ describe('отметки', () => {
     const { bot, calls } = await ready()
     await bot.handleUpdate(tap('s:me'))
     expect(String(calls.find((c) => c.method === 'editMessageText')?.payload.text)).toContain('<pre>')
+  })
+
+  it('повторный тап по галочке снимает отметку', async () => {
+    const { db, bot, calls, check } = await ready()
+    await bot.handleUpdate(tap(`t:${check.id}`))
+    await bot.handleUpdate(tap(`t:${check.id}`))
+
+    const rows = await db.q(`select 1 from entries where tracker_id = $1`, [check.id])
+    expect(rows.length).toBe(0)
+
+    const answer = calls.filter((c) => c.method === 'answerCallbackQuery').at(-1)
+    expect(answer?.payload.text).toBe('Снято')
+    const edit = calls.filter((c) => c.method === 'editMessageText').at(-1)
+    expect(JSON.stringify(edit?.payload.reply_markup)).toContain('⬜️ Зарядка')
+  })
+
+  it('тап по трекеру, который перестал быть активным', async () => {
+    const { db, bot, calls, check } = await ready()
+    await archiveTracker(db, check.id)
+    await bot.handleUpdate(tap(`t:${check.id}`))
+
+    const answer = calls.find((c) => c.method === 'answerCallbackQuery')
+    expect(answer?.payload.text).toBe('Трекер больше не активен')
+    expect(calls.some((c) => c.method === 'editMessageText')).toBe(true)
+    const rows = await db.q(`select 1 from entries where tracker_id = $1`, [check.id])
+    expect(rows.length).toBe(0)
+  })
+
+  it('трекер архивируют между вопросом о числе и ответом — значение не пишется', async () => {
+    const { db, bot, calls, pages } = await ready()
+    await bot.handleUpdate(tap(`t:${pages.id}`))
+    await archiveTracker(db, pages.id)
+    await bot.handleUpdate(message('5'))
+
+    expect(calls.some((c) => String(c.payload.text ?? '').includes('Трекер больше не активен'))).toBe(true)
+    const rows = await db.q(`select 1 from entries where tracker_id = $1`, [pages.id])
+    expect(rows.length).toBe(0)
+  })
+
+  it('0 снимает отметку по числовому трекеру', async () => {
+    const { db, bot, calls, pages } = await ready()
+    await bot.handleUpdate(tap(`t:${pages.id}`))
+    await bot.handleUpdate(message('12'))
+    let rows = await db.q(`select value::float8 as value from entries where tracker_id = $1`, [pages.id])
+    expect(rows[0]?.value).toBe(12)
+
+    await bot.handleUpdate(tap(`t:${pages.id}`))
+    await bot.handleUpdate(message('0'))
+    rows = await db.q(`select 1 from entries where tracker_id = $1`, [pages.id])
+    expect(rows.length).toBe(0)
+    expect(calls.some((c) => String(c.payload.text ?? '').includes('снята'))).toBe(true)
+  })
+
+  it('/name меняет имя, а при заблокированном имени — отказывает', async () => {
+    const { db, bot, calls } = await ready()
+    await bot.handleUpdate(message('/name Иван Петров'))
+    expect((await getUser(db, 7))?.display_name).toBe('Иван Петров')
+    expect(calls.at(-1)?.payload.text).toContain('Иван Петров')
+
+    await setDisplayName(db, 7, 'Админское Имя', { byAdmin: true })
+    calls.length = 0
+    await bot.handleUpdate(message('/name Другое Имя'))
+    expect((await getUser(db, 7))?.display_name).toBe('Админское Имя')
+    expect(calls.at(-1)?.payload.text).toContain('администратор')
+  })
+})
+
+describe('групповая сводка', () => {
+  it('без групп — сообщение об этом', async () => {
+    const { bot, calls } = await harness()
+    await bot.handleUpdate(message('/start'))
+    await bot.handleUpdate(message('Айгуль Смагулова'))
+    calls.length = 0
+
+    await bot.handleUpdate(tap('s:g'))
+    const text = String(calls.find((c) => c.method === 'editMessageText')?.payload.text)
+    expect(text).toBe('Вы пока не состоите ни в одной группе.')
+  })
+
+  it('в одной группе — сводка с «Вы» и процентами', async () => {
+    const h = await harness()
+    await h.bot.handleUpdate(message('/start'))
+    await h.bot.handleUpdate(message('Айгуль Смагулова'))
+    const g = await createGroup(h.db, 'Утро')
+    const check = await createTracker(h.db, { title: 'Зарядка', kind: 'check' })
+    await setGroupTracker(h.db, g.id, check.id, true)
+    await setMembership(h.db, 7, g.id, true)
+    await upsertFromTelegram(h.db, { id: 8, username: 'ivan', first_name: 'Иван' })
+    await setMembership(h.db, 8, g.id, true)
+    h.calls.length = 0
+
+    await h.bot.handleUpdate(tap('s:g'))
+    const text = String(h.calls.find((c) => c.method === 'editMessageText')?.payload.text)
+    expect(text).toContain('Вы')
+    expect(text).toMatch(/\d+%/)
   })
 })

@@ -4577,13 +4577,26 @@ git commit -m "feat: evening reminders, weekly group reports and deploy config"
 
 - [ ] **Step 9: Развернуть**
 
-1. `npm i -g vercel && vercel link`
-2. `vercel integration add neon` — `DATABASE_URL` появится в проекте
-3. `vercel env add` для `BOT_TOKEN`, `ADMIN_IDS`, `TZ`, `WEBHOOK_SECRET`, `SETUP_SECRET`, `CRON_SECRET`, `APP_URL`
-4. `vercel deploy --prod`
-5. `curl "https://<домен>/api/setup?key=<SETUP_SECRET>"` — миграции, вебхук, кнопка меню
-6. Добавить бота в чат каждой группы, написать там `/bind`
-7. Проверить в Telegram: `/start` → имя → админ получает уведомление → назначить группы в Mini App → трекеры появились в меню
+Проект уже привязан к репозиторию в Vercel, деплой идёт из GitHub: пуш в `main` собирает
+продакшен. Домен — `https://telegram-trecker-ai-bot.vercel.app`, он же `APP_URL`.
+CLI нужен только для переменных окружения (или задайте их в веб-интерфейсе проекта).
+
+1. Neon как Marketplace-интеграция проекта — `DATABASE_URL` проставляется сам.
+2. Переменные окружения проекта (Production): `BOT_TOKEN`, `ADMIN_IDS`, `TZ=Asia/Almaty`,
+   `WEBHOOK_SECRET`, `SETUP_SECRET`, `CRON_SECRET`,
+   `APP_URL=https://telegram-trecker-ai-bot.vercel.app`.
+   `WEBHOOK_SECRET`, `SETUP_SECRET` и `CRON_SECRET` — любые случайные строки, например
+   `openssl rand -hex 16`.
+3. Влить ветку в `main` — Vercel соберёт продакшен сам.
+4. `curl "https://telegram-trecker-ai-bot.vercel.app/api/setup?key=<SETUP_SECRET>"` —
+   миграции, `setWebhook` с секретом, кнопка Mini App в меню бота. Идемпотентно,
+   вызывается после каждого деплоя, меняющего схему.
+5. Добавить бота в чат каждой группы и написать там `/bind`.
+6. Проверить в Telegram: `/start` → имя → админ получает уведомление → назначить группы
+   в Mini App → трекеры появились в меню.
+
+Про cron: расписания из `vercel.json` подхватываются только на продакшен-деплое, в
+preview-деплоях они не запускаются — это ожидаемо.
 
 ---
 

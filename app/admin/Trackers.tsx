@@ -8,6 +8,8 @@ export default function Trackers(props: { data: Bootstrap; busy: boolean; onActi
   const [form, setForm] = useState({
     title: '', description: '', kind: 'check' as 'check' | 'number', target: '10', unit: '',
   })
+  const [editing, setEditing] = useState<number | null>(null)
+  const [draft, setDraft] = useState({ title: '', description: '', target: '', unit: '' })
 
   const groupTitle = (id: number) => data.groups.find((g) => g.id === id)?.title ?? `#${id}`
 
@@ -70,26 +72,95 @@ export default function Trackers(props: { data: Bootstrap; busy: boolean; onActi
 
       {data.trackers.map((t) => (
         <section key={t.id} className="rounded-xl border border-black/10 p-3 text-sm dark:border-white/15">
-          <div className="flex items-center justify-between">
-            <b>{t.title}</b>
-            <button
-              className="text-xs opacity-60 disabled:opacity-30 disabled:cursor-progress"
-              disabled={busy}
-              onClick={() => {
-                if (window.confirm(`Архивировать трекер «${t.title}»? Он исчезнет из групп, где используется.`)) {
-                  props.onAction({ action: 'archive', trackerId: t.id })
-                }
-              }}
-            >
-              архивировать
-            </button>
-          </div>
-          {t.description && <div className="mt-1 text-xs opacity-80">{t.description}</div>}
-          <div className="mt-1 text-xs opacity-70">
-            {t.kind === 'number' ? `число, цель ${t.target} ${t.unit ?? ''}` : 'галочка'}
-            {' · '}
-            {t.group_ids.length ? `в группах: ${t.group_ids.map(groupTitle).join(', ')}` : 'не привязан ни к одной группе'}
-          </div>
+          {editing === t.id ? (
+            <div className="space-y-2">
+              <input
+                className="w-full rounded border border-black/20 px-2 py-1 text-sm dark:border-white/20 dark:bg-transparent"
+                placeholder="Название на кнопку"
+                value={draft.title}
+                onChange={(e) => setDraft({ ...draft, title: e.target.value })}
+                autoFocus
+              />
+              <input
+                className="w-full rounded border border-black/20 px-2 py-1 text-sm dark:border-white/20 dark:bg-transparent"
+                placeholder="Описание"
+                maxLength={200}
+                value={draft.description}
+                onChange={(e) => setDraft({ ...draft, description: e.target.value })}
+              />
+              {t.kind === 'number' && (
+                <div className="flex gap-2">
+                  <input
+                    className="w-20 rounded border border-black/20 px-2 py-1 dark:border-white/20 dark:bg-transparent"
+                    placeholder="цель"
+                    value={draft.target}
+                    onChange={(e) => setDraft({ ...draft, target: e.target.value })}
+                  />
+                  <input
+                    className="w-24 rounded border border-black/20 px-2 py-1 dark:border-white/20 dark:bg-transparent"
+                    placeholder="стр."
+                    value={draft.unit}
+                    onChange={(e) => setDraft({ ...draft, unit: e.target.value })}
+                  />
+                </div>
+              )}
+              <div className="flex justify-end">
+                <button
+                  className="text-sm disabled:opacity-60 disabled:cursor-progress"
+                  disabled={busy}
+                  onClick={async () => {
+                    // kind в базе update не меняет, но валидация на сервере его требует —
+                    // передаём текущий, иначе цель/единица числового трекера разъедутся.
+                    const ok = await props.onAction({
+                      action: 'update', trackerId: t.id, kind: t.kind,
+                      title: draft.title, description: draft.description,
+                      target: t.kind === 'number' ? Number(draft.target) : t.target,
+                      unit: t.kind === 'number' ? draft.unit : t.unit,
+                    })
+                    if (ok) setEditing(null)
+                  }}
+                >
+                  Сохранить
+                </button>
+              </div>
+            </div>
+          ) : (
+            <>
+              <div className="flex items-center justify-between gap-2">
+                <b className="flex-1">{t.title}</b>
+                <button
+                  className="text-sm opacity-60 disabled:opacity-30 disabled:cursor-progress"
+                  disabled={busy}
+                  onClick={() => {
+                    setEditing(t.id)
+                    setDraft({
+                      title: t.title, description: t.description ?? '',
+                      target: String(t.target), unit: t.unit ?? '',
+                    })
+                  }}
+                >
+                  ✏️
+                </button>
+                <button
+                  className="text-xs opacity-60 disabled:opacity-30 disabled:cursor-progress"
+                  disabled={busy}
+                  onClick={() => {
+                    if (window.confirm(`Архивировать трекер «${t.title}»? Он исчезнет из групп, где используется.`)) {
+                      props.onAction({ action: 'archive', trackerId: t.id })
+                    }
+                  }}
+                >
+                  архивировать
+                </button>
+              </div>
+              {t.description && <div className="mt-1 text-xs opacity-80">{t.description}</div>}
+              <div className="mt-1 text-xs opacity-70">
+                {t.kind === 'number' ? `число, цель ${t.target} ${t.unit ?? ''}` : 'галочка'}
+                {' · '}
+                {t.group_ids.length ? `в группах: ${t.group_ids.map(groupTitle).join(', ')}` : 'не привязан ни к одной группе'}
+              </div>
+            </>
+          )}
         </section>
       ))}
     </div>

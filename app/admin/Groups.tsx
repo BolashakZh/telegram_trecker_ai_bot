@@ -10,6 +10,8 @@ export default function Groups(props: {
 }) {
   const { data, busy } = props
   const [title, setTitle] = useState('')
+  const [editing, setEditing] = useState<number | null>(null)
+  const [draft, setDraft] = useState('')
 
   return (
     <div className="space-y-3">
@@ -36,19 +38,49 @@ export default function Groups(props: {
         const members = data.users.filter((u) => u.group_ids.includes(g.id))
         return (
           <section key={g.id} className="rounded-xl border border-black/10 p-3 dark:border-white/15">
-            <div className="flex items-center justify-between">
-              <b>{g.title}</b>
-              <button
-                className="text-xs opacity-60 disabled:opacity-30 disabled:cursor-progress"
-                disabled={busy}
-                onClick={() => {
-                  if (window.confirm(`Архивировать группу «${g.title}»? Её трекеры исчезнут у участников.`)) {
-                    props.onAction({ action: 'archive', groupId: g.id })
-                  }
-                }}
-              >
-                архивировать
-              </button>
+            <div className="flex items-center justify-between gap-2">
+              {editing === g.id ? (
+                <>
+                  <input
+                    className="flex-1 rounded border border-black/20 px-2 py-1 text-sm dark:border-white/20 dark:bg-transparent"
+                    value={draft}
+                    onChange={(e) => setDraft(e.target.value)}
+                    autoFocus
+                  />
+                  <button
+                    className="text-sm disabled:opacity-60 disabled:cursor-progress"
+                    disabled={busy}
+                    onClick={async () => {
+                      const ok = await props.onAction({ action: 'rename', groupId: g.id, title: draft })
+                      if (ok) setEditing(null)
+                    }}
+                  >
+                    Сохранить
+                  </button>
+                </>
+              ) : (
+                <>
+                  <b className="flex-1">{g.title}</b>
+                  <button
+                    className="text-sm opacity-60 disabled:opacity-30 disabled:cursor-progress"
+                    disabled={busy}
+                    onClick={() => { setEditing(g.id); setDraft(g.title) }}
+                  >
+                    ✏️
+                  </button>
+                  <button
+                    className="text-xs opacity-60 disabled:opacity-30 disabled:cursor-progress"
+                    disabled={busy}
+                    onClick={() => {
+                      if (window.confirm(`Архивировать группу «${g.title}»? Её трекеры исчезнут у участников.`)) {
+                        props.onAction({ action: 'archive', groupId: g.id })
+                      }
+                    }}
+                  >
+                    архивировать
+                  </button>
+                </>
+              )}
             </div>
 
             <div className="mt-1 text-xs opacity-70">

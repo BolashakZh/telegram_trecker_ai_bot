@@ -1,5 +1,6 @@
 import type { Db } from './db.ts'
 import { personName } from './text.ts'
+import { BadRequest } from './validate.ts'
 
 export type MemberScore = {
   user_id: number; name: string; done: number; expected: number; percent: number
@@ -36,6 +37,7 @@ export async function groupReport(
   db: Db, groupId: number, from: string, to: string,
 ): Promise<GroupReport> {
   const [g] = await db.q(`select id, title from groups where id = $1`, [groupId])
+  if (!g) throw new BadRequest('Группа не найдена')
 
   const members = await db.q(
     `with pairs as (${PAIRS}),

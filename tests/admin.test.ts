@@ -103,4 +103,20 @@ describe('statsQuery', () => {
     expect(rep.from).toBe('2026-09-07')
     expect(rep.members[0]).toMatchObject({ done: 1, expected: 4 })
   })
+
+  it('отсутствующий или нечисловой groupId даёт BadRequest, а не падает необработанно', async () => {
+    const db = await testDb()
+    // Number(url.searchParams.get('groupId')) при отсутствующем параметре даёт 0
+    await expect(statsQuery(db, { groupId: 0, period: 'week', today: '2026-09-10' }))
+      .rejects.toBeInstanceOf(BadRequest)
+    // а при нечисловом значении — NaN
+    await expect(statsQuery(db, { groupId: Number('abc'), period: 'week', today: '2026-09-10' }))
+      .rejects.toBeInstanceOf(BadRequest)
+  })
+
+  it('несуществующий числовой groupId даёт понятную ошибку, а не TypeError', async () => {
+    const db = await testDb()
+    await expect(statsQuery(db, { groupId: 999999, period: 'week', today: '2026-09-10' }))
+      .rejects.toThrow('Группа не найдена')
+  })
 })

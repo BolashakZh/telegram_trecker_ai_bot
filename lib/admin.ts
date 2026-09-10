@@ -112,6 +112,7 @@ export async function statsQuery(
   db: Db,
   params: { groupId: number; period: 'week' | 'month'; today: string },
 ): Promise<GroupReport> {
+  const groupId = id(params.groupId)
   const from = params.period === 'month' ? monthStart(params.today) : weekStart(params.today)
-  return groupReport(db, params.groupId, from, params.today)
+  return groupReport(db, groupId, from, params.today)
 }

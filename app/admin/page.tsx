@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import type { Bootstrap } from '@/lib/admin.ts'
-import { alertUser, api } from './api.ts'
+import { alertUser, api, ApiError, waitForTelegram } from './api.ts'
 import Dashboard from './Dashboard.tsx'
 import Groups from './Groups.tsx'
 import People from './People.tsx'
@@ -18,14 +18,22 @@ const TABS = [
 export default function AdminPage() {
   const [tab, setTab] = useState<(typeof TABS)[number]['key']>('people')
   const [data, setData] = useState<Bootstrap | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<{ status?: number; message: string } | null>(null)
   const [busy, setBusy] = useState(false)
 
-  useEffect(() => {
-    window.Telegram?.WebApp?.ready()
-    window.Telegram?.WebApp?.expand()
-    api.bootstrap().then(setData).catch((e: Error) => setError(e.message))
-  }, [])
+  function load(): void {
+    setError(null)
+    waitForTelegram()
+      .then(() => {
+        window.Telegram?.WebApp?.ready()
+        window.Telegram?.WebApp?.expand()
+        return api.bootstrap()
+      })
+      .then(setData)
+      .catch((e: Error) => setError({ status: e instanceof ApiError ? e.status : undefined, message: e.message }))
+  }
+
+  useEffect(load, [])
 
   async function run<T>(action: () => Promise<T>, apply: (res: T) => void): Promise<boolean> {
     setBusy(true)
@@ -41,9 +49,22 @@ export default function AdminPage() {
   }
 
   if (error) {
+    if (error.status === 401) {
+      return (
+        <main className="min-h-screen bg-white p-6 text-center text-sm text-black/70 dark:bg-black dark:text-white/70">
+          Откройте админку через бота — кнопкой «⚙️ Открыть админку».
+        </main>
+      )
+    }
     return (
-      <main className="min-h-screen bg-white p-6 text-center text-sm text-black/70 dark:bg-black dark:text-white/70">
-        Откройте админку через бота — кнопкой «⚙️ Открыть админку».
+      <main className="flex min-h-screen flex-col items-center justify-center gap-3 bg-white p-6 text-center text-sm text-black/70 dark:bg-black dark:text-white/70">
+        <p>{error.message}</p>
+        <button
+          className="rounded bg-blue-600 px-3 py-1 text-white"
+          onClick={load}
+        >
+          Попробовать ещё раз
+        </button>
       </main>
     )
   }

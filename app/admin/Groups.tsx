@@ -41,7 +41,11 @@ export default function Groups(props: {
               <button
                 className="text-xs opacity-60 disabled:opacity-30 disabled:cursor-progress"
                 disabled={busy}
-                onClick={() => props.onAction({ action: 'archive', groupId: g.id })}
+                onClick={() => {
+                  if (window.confirm(`Архивировать группу «${g.title}»? Её трекеры исчезнут у участников.`)) {
+                    props.onAction({ action: 'archive', groupId: g.id })
+                  }
+                }}
               >
                 архивировать
               </button>

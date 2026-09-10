@@ -16,13 +16,35 @@ export function alertUser(message: string): void {
   else window.alert(message)
 }
 
+// Несёт код ответа, чтобы вызывающий код мог отличить «нет доступа» (401,
+// ожидаемо вне бота) от «сервер сломался» (500 и прочее, ожидаемо чинится
+// повтором) — иначе экран ошибки одинаково врёт про «откройте через бота»
+// даже когда причина в неподнятой схеме базы.
+export class ApiError extends Error {
+  status: number
+  constructor(message: string, status: number) {
+    super(message)
+    this.status = status
+  }
+}
+
+// Даёт странице шанс дождаться скрипта Telegram, если beforeInteractive по
+// какой-то причине не успел (второй рубеж защиты; основной — next/script).
+export async function waitForTelegram(timeoutMs = 3000): Promise<void> {
+  const start = Date.now()
+  while (!window.Telegram?.WebApp) {
+    if (Date.now() - start >= timeoutMs) return
+    await new Promise((r) => setTimeout(r, 50))
+  }
+}
+
 async function call<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, {
     ...init,
     headers: { 'Content-Type': 'application/json', 'X-Init-Data': initData() },
   })
   const data = await res.json()
-  if (!res.ok) throw new Error((data as { error?: string }).error ?? 'Ошибка запроса')
+  if (!res.ok) throw new ApiError((data as { error?: string }).error ?? 'Ошибка запроса', res.status)
   return data as T
 }
 

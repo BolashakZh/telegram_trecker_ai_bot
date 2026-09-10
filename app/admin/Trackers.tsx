@@ -75,7 +75,11 @@ export default function Trackers(props: { data: Bootstrap; busy: boolean; onActi
             <button
               className="text-xs opacity-60 disabled:opacity-30 disabled:cursor-progress"
               disabled={busy}
-              onClick={() => props.onAction({ action: 'archive', trackerId: t.id })}
+              onClick={() => {
+                if (window.confirm(`Архивировать трекер «${t.title}»? Он исчезнет из групп, где используется.`)) {
+                  props.onAction({ action: 'archive', trackerId: t.id })
+                }
+              }}
             >
               архивировать
             </button>

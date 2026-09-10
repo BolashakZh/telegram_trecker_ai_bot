@@ -4,9 +4,22 @@ import { groupsKeyboard } from '../menu.ts'
 import type { BotDeps } from './user.ts'
 
 export function registerAdmin(bot: Bot, deps: BotDeps): void {
+  bot.command('bind', async (ctx) => {
+    if (!deps.adminIds.includes(ctx.from!.id)) return
+    const groups = await listGroups(deps.db)
+    if (groups.length === 0) {
+      await ctx.reply('Сначала создайте группу в админке.')
+      return
+    }
+    await ctx.reply('К какой группе привязать этот чат?', {
+      reply_markup: groupsKeyboard(groups, 'b:'),
+    })
+  })
+
+  // Fallback для групповых чатов, где message:text может срабатывать раньше
   bot.on('message:text', async (ctx, next) => {
     const text = ctx.message.text.trim()
-    if (text.startsWith('/bind')) {
+    if (text === '/bind' || text === '/bind@tracker_bot') {
       if (!deps.adminIds.includes(ctx.from!.id)) return
       const groups = await listGroups(deps.db)
       if (groups.length === 0) {

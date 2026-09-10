@@ -61,6 +61,14 @@ describe('/bind', () => {
     expect((await listGroups(db))[0].chat_id).toBe(-100500)
   })
 
+  it('команда с суффиксом бота /bind@tracker_bot даёт клавиатуру', async () => {
+    const { db, bot, calls } = await harness()
+    await createGroup(db, 'Утро')
+
+    await bot.handleUpdate(groupMessage('/bind@tracker_bot', 99))
+    expect(JSON.stringify(calls.at(-1)?.payload.reply_markup)).toContain('b:1')
+  })
+
   it('не-админа игнорирует', async () => {
     const { db, bot, calls } = await harness()
     await createGroup(db, 'Утро')

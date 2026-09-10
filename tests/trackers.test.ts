@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { createGroup, setMembership } from '../lib/groups.ts'
+import { archiveGroup, createGroup, setMembership } from '../lib/groups.ts'
 import {
   activeTrackersForUser, archiveTracker, createTracker, listTrackers, setGroupTracker,
 } from '../lib/trackers.ts'
@@ -53,6 +53,37 @@ describe('activeTrackersForUser', () => {
     expect(t.target).toBe(10)
     expect(typeof t.target).toBe('number')
     expect(t.unit).toBe('стр.')
+  })
+
+  it('архивная группа закрывает доступ к её трекеру', async () => {
+    const db = await testDb()
+    await upsertFromTelegram(db, { id: 7, first_name: 'А' })
+    const g = await createGroup(db, 'Утро')
+    const reading = await createTracker(db, { title: 'Чтение', kind: 'check' })
+    await setGroupTracker(db, g.id, reading.id, true)
+    await setMembership(db, 7, g.id, true)
+
+    expect((await activeTrackersForUser(db, 7)).map((t) => t.title)).toEqual(['Чтение'])
+
+    await archiveGroup(db, g.id)
+
+    expect(await activeTrackersForUser(db, 7)).toEqual([])
+  })
+
+  it('архив одной из двух групп не убирает трекер, доступный через вторую', async () => {
+    const db = await testDb()
+    await upsertFromTelegram(db, { id: 7, first_name: 'А' })
+    const morning = await createGroup(db, 'Утро')
+    const sport = await createGroup(db, 'Спорт')
+    const reading = await createTracker(db, { title: 'Чтение', kind: 'check' })
+    await setGroupTracker(db, morning.id, reading.id, true)
+    await setGroupTracker(db, sport.id, reading.id, true)
+    await setMembership(db, 7, morning.id, true)
+    await setMembership(db, 7, sport.id, true)
+
+    await archiveGroup(db, morning.id)
+
+    expect((await activeTrackersForUser(db, 7)).map((t) => t.title)).toEqual(['Чтение'])
   })
 })
 

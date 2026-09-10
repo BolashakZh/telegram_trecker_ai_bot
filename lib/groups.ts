@@ -33,9 +33,21 @@ export async function archiveGroup(db: Db, id: number): Promise<void> {
 }
 
 export async function bindChat(db: Db, groupId: number, chatId: number): Promise<void> {
-  // chat_id уникален: сначала снимаем его со старой группы, иначе вставка упадёт.
-  await db.q(`update groups set chat_id = null where chat_id = $1`, [chatId])
-  await db.q(`update groups set chat_id = $2 where id = $1`, [groupId, chatId])
+  // Один оператор — атомарен даже без явной транзакции (HTTP-драйвер Neon
+  // шлёт каждый вызов db.q отдельным запросом, между ними транзакции нет).
+  // chat_id уникален, поэтому порядок важен: сперва CTE ставит chat_id новой
+  // группе, затем внешний update снимает его со старой. Обратный порядок
+  // (сначала снять, потом поставить одним CASE-update) при повторных
+  // перепривязках ловит "duplicate key value violates unique constraint" —
+  // Postgres не гарантирует, в каком порядке будут обработаны строки одного
+  // UPDATE, и прежний владелец может обработаться позже нового.
+  await db.q(
+    `with setnew as (
+       update groups set chat_id = $2 where id = $1 returning id
+     )
+     update groups set chat_id = null where chat_id = $2 and id <> $1`,
+    [groupId, chatId],
+  )
 }
 
 export async function unbindChat(db: Db, groupId: number): Promise<void> {

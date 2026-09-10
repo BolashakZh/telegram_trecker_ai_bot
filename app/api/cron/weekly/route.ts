@@ -4,6 +4,7 @@ import { sendWeekly } from '@/lib/report.ts'
 import { getBot, getDb } from '@/lib/runtime.ts'
 
 export const runtime = 'nodejs'
+export const maxDuration = 60
 export const dynamic = 'force-dynamic'
 
 export async function GET(req: Request): Promise<Response> {

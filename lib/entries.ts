@@ -5,19 +5,25 @@ export type DayState = { tracker_id: number; value: number; done: boolean }
 export async function toggleCheck(
   db: Db, userId: number, trackerId: number, day: string,
 ): Promise<{ done: boolean }> {
-  const removed = await db.q(
-    `delete from entries where user_id = $1 and tracker_id = $2 and day = $3::date
+  // Один оператор — атомарен даже без явной транзакции (см. bindChat в
+  // lib/groups.ts). DELETE берёт блокировку строки по первичному ключу;
+  // параллельный вызов того же тоггла (двойной тап, повтор апдейта от
+  // Telegram) дожидается этой блокировки и видит уже изменённое состояние,
+  // поэтому INSERT ... WHERE NOT EXISTS не вставит вторую строку и не
+  // вернёт нас в "поставлено" вместо исходного "снято".
+  const rows = await db.q(
+    `with del as (
+       delete from entries
+        where user_id = $1 and tracker_id = $2 and day = $3::date
+       returning 1
+     )
+     insert into entries (user_id, tracker_id, day, value)
+     select $1, $2, $3::date, 1
+      where not exists (select 1 from del)
      returning value`,
     [userId, trackerId, day],
   )
-  if (removed.length > 0) return { done: false }
-
-  await db.q(
-    `insert into entries (user_id, tracker_id, day, value) values ($1, $2, $3::date, 1)
-     on conflict (user_id, tracker_id, day) do update set value = 1`,
-    [userId, trackerId, day],
-  )
-  return { done: true }
+  return { done: rows.length > 0 }
 }
 
 export async function setValue(

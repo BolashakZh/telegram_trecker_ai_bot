@@ -52,6 +52,18 @@ describe('setValue', () => {
     expect(await setValue(db, 7, pages.id, DAY, 0)).toEqual({ done: false, cleared: true })
     expect((await dayState(db, 7, DAY)).has(pages.id)).toBe(false)
   })
+
+  it('значение ровно на границе цели — тоже выполнение', async () => {
+    const { db, pages } = await fixture()
+    expect(await setValue(db, 7, pages.id, DAY, 10)).toEqual({ done: true, cleared: false })
+  })
+
+  it('ноль дважды подряд не падает и оставляет состояние пустым', async () => {
+    const { db, pages } = await fixture()
+    expect(await setValue(db, 7, pages.id, DAY, 0)).toEqual({ done: false, cleared: true })
+    expect(await setValue(db, 7, pages.id, DAY, 0)).toEqual({ done: false, cleared: true })
+    expect((await dayState(db, 7, DAY)).has(pages.id)).toBe(false)
+  })
 })
 
 describe('parseNumber', () => {

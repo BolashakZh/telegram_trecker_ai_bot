@@ -13,7 +13,7 @@
 ## Global Constraints
 
 - TypeScript везде: `lib/`, роуты, страницы. Никакого JS-кода, кроме конфигов, которым это положено.
-- Прод-зависимости ровно четыре: `next`, `react`, `react-dom`, `grammy`, `@neondatabase/serverless`. Dev: `typescript`, `@types/*`, `vitest`, `@electric-sql/pglite`, `tailwindcss`, `@tailwindcss/postcss`. Никаких ORM, zod, dayjs, chart-библиотек, SDK-обёрток над Telegram WebApp.
+- Прод-зависимости ровно пять: `next`, `react`, `react-dom`, `grammy`, `@neondatabase/serverless`. Dev: `typescript`, `@types/*`, `vitest`, `@electric-sql/pglite`, `tailwindcss`, `@tailwindcss/postcss`. Никаких ORM, zod, dayjs, chart-библиотек, SDK-обёрток над Telegram WebApp.
 - `lib/**` не импортирует `next/*`, `next/server`, `react` и не читает `process.env` напрямую (кроме `lib/config.ts`). Всё, что нужно, приходит аргументами. Это условие проверяемо и оно — причина, по которой тесты не требуют ни сети, ни секретов.
 - Слой данных — только `db.q(text, params)`. Даты пересекают границу SQL ↔ TS **только строками** `YYYY-MM-DD`: наружу `::date::text`, внутрь `$n::date`. Никаких `Date` в SQL-слое.
 - Все агрегаты кастуются явно: `count(*)::int`, `sum(...)::float8`, `target::float8` — иначе Postgres отдаёт `numeric` строкой.
@@ -1004,6 +1004,185 @@ git commit -m "feat: groups, tracker catalog and their links"
 
 ---
 
+### Task 3b: Описание трекера
+
+**Files:**
+- Modify: `lib/db.ts` (схема + миграция колонки), `lib/trackers.ts`
+- Test: `tests/trackers.test.ts` (дописать), `tests/db.test.ts` (дописать)
+
+**Interfaces:**
+- Consumes: всё из задачи 3.
+- Produces (изменение существующих):
+  - `Tracker` получает поле `description: string | null`
+  - `createTracker(db, { title, kind, target?, unit?, description? })`
+  - `updateTracker(db, id, { title, target, unit, description })`
+  - `listTrackers`, `groupTrackers`, `activeTrackersForUser` отдают `description`
+
+Зачем: на кнопку влезает только короткое название («Книга»), а человеку нужно понимать,
+о чём речь — «читаем про психологию, 10 стр. в день». Описание показывается на экране
+«ℹ️ Трекеры» (задача 7) и в запросе числа (задача 8), задаётся в Mini App (задача 13).
+
+- [ ] **Step 1: Дописать падающие тесты**
+
+В `tests/trackers.test.ts` добавить:
+
+```ts
+describe('описание трекера', () => {
+  it('сохраняется при создании и приезжает во всех выборках', async () => {
+    const db = await testDb()
+    await upsertFromTelegram(db, { id: 7 })
+    const g = await createGroup(db, 'Утро')
+    const book = await createTracker(db, {
+      title: 'Книга', kind: 'number', target: 10, unit: 'стр.',
+      description: 'читаем про психологию, 10 страниц в день',
+    })
+    await setGroupTracker(db, g.id, book.id, true)
+    await setMembership(db, 7, g.id, true)
+
+    expect(book.description).toBe('читаем про психологию, 10 страниц в день')
+    expect((await listTrackers(db))[0].description).toBe('читаем про психологию, 10 страниц в день')
+    expect((await activeTrackersForUser(db, 7))[0].description).toBe('читаем про психологию, 10 страниц в день')
+  })
+
+  it('необязательно: без описания приезжает null', async () => {
+    const db = await testDb()
+    const t = await createTracker(db, { title: 'Зарядка', kind: 'check' })
+    expect(t.description).toBeNull()
+  })
+
+  it('updateTracker меняет описание, включая стирание в null', async () => {
+    const db = await testDb()
+    const t = await createTracker(db, {
+      title: 'Книга', kind: 'number', target: 10, unit: 'стр.', description: 'старое',
+    })
+    await updateTracker(db, t.id, { title: 'Книга', target: 10, unit: 'стр.', description: 'новое' })
+    expect((await listTrackers(db))[0].description).toBe('новое')
+
+    await updateTracker(db, t.id, { title: 'Книга', target: 10, unit: 'стр.', description: null })
+    expect((await listTrackers(db))[0].description).toBeNull()
+  })
+})
+```
+
+В `tests/db.test.ts` добавить в блок `describe('migrate', ...)`:
+
+```ts
+it('добавляет колонку description в уже созданную таблицу trackers', async () => {
+  const db = await testDb()
+  await db.q(`alter table trackers drop column description`)
+  await migrate(db)
+
+  const rows = await db.q(
+    `select column_name from information_schema.columns
+     where table_name = 'trackers' and column_name = 'description'`,
+  )
+  expect(rows).toHaveLength(1)
+})
+```
+
+Импорты `updateTracker` и `listTrackers` в `tests/trackers.test.ts` при необходимости
+дописать в существующую строку импорта из `../lib/trackers.ts`.
+
+- [ ] **Step 2: Запустить тесты и убедиться, что они падают**
+
+Run: `npm test -- tests/trackers.test.ts tests/db.test.ts`
+Expected: FAIL — колонки `description` нет, `createTracker` её не принимает.
+
+- [ ] **Step 3: Добавить колонку в `lib/db.ts`**
+
+В константе `SCHEMA` в `create table if not exists trackers` добавить строку сразу после
+`title`:
+
+```sql
+  description text,
+```
+
+И отдельным оператором в конце `SCHEMA` — миграция для баз, созданных до этой правки
+(локальная и прод-база уже существуют, `create table if not exists` их не изменит):
+
+```sql
+alter table trackers add column if not exists description text;
+```
+
+- [ ] **Step 4: Провести описание через `lib/trackers.ts`**
+
+```ts
+export type Tracker = {
+  id: number
+  title: string
+  description: string | null
+  kind: TrackerKind
+  target: number
+  unit: string | null
+  archived_at: string | null
+}
+
+const COLS = `id, title, description, kind, target::float8 as target, unit, archived_at::text as archived_at`
+```
+
+`toTracker` получает `description: (row.description as string) ?? null`.
+
+```ts
+export async function createTracker(
+  db: Db,
+  t: { title: string; kind: TrackerKind; target?: number; unit?: string | null; description?: string | null },
+): Promise<Tracker> {
+  const [row] = await db.q(
+    `insert into trackers (title, description, kind, target, unit) values ($1, $2, $3, $4, $5)
+     returning ${COLS}`,
+    [
+      t.title,
+      t.description ?? null,
+      t.kind,
+      t.kind === 'check' ? 1 : (t.target ?? 1),
+      t.kind === 'check' ? null : (t.unit ?? null),
+    ],
+  )
+  return toTracker(row)
+}
+
+export async function updateTracker(
+  db: Db,
+  id: number,
+  t: { title: string; target: number; unit: string | null; description: string | null },
+): Promise<void> {
+  await db.q(
+    `update trackers set title = $2, description = $3, target = $4, unit = $5 where id = $1`,
+    [id, t.title, t.description, t.target, t.unit],
+  )
+}
+```
+
+В `listTrackers`, `groupTrackers` и `activeTrackersForUser` добавить `t.description` в
+списки колонок (в `listTrackers` — с алиасом `t.`, там `group by t.id`).
+
+Заодно закрыть замечание ревью задачи 3: этот список колонок с алиасом повторяется в трёх
+запросах дословно. Вынести его в константу рядом с `COLS`:
+
+```ts
+const COLS_T = `t.id, t.title, t.description, t.kind, t.target::float8 as target, t.unit,
+                t.archived_at::text as archived_at`
+```
+
+и подставить во все три места. Одна опечатка в одной копии из трёх иначе тихо разойдётся
+с остальными.
+
+- [ ] **Step 5: Запустить тесты и убедиться, что они проходят**
+
+Run: `npm test`
+Expected: PASS — новые тесты зелёные, старые не сломались.
+Run: `npx tsc --noEmit`
+Expected: без ошибок.
+
+- [ ] **Step 6: Коммит**
+
+```bash
+git add lib/db.ts lib/trackers.ts tests/trackers.test.ts tests/db.test.ts
+git commit -m "feat: tracker description"
+```
+
+---
+
 ### Task 4: Отметки, ввод чисел и дедуп апдейтов
 
 **Files:**
@@ -1813,6 +1992,7 @@ git commit -m "feat: group stats — member scores, tracker scores, day map"
   - `padRight(text: string, width: number): string`
 - Produces (`lib/menu.ts`):
   - `mainScreen(args: { day: string; trackers: Tracker[]; state: Map<number, DayState> }): { text: string; keyboard: InlineKeyboardMarkup }`
+  - `infoScreen(trackers: Tracker[]): string` — описания трекеров
   - `statsScreen(stats: TrackerStats[]): string`
   - `groupScreen(report: GroupReport, viewerId: number, missing: {...}[]): string`
   - `groupsKeyboard(groups: Group[], prefix: string): InlineKeyboardMarkup`
@@ -1872,11 +2052,17 @@ describe('padRight', () => {
 
 ```ts
 import { describe, expect, it } from 'vitest'
-import { mainScreen, statsScreen } from '../lib/menu.ts'
+import { infoScreen, mainScreen, statsScreen } from '../lib/menu.ts'
 import type { Tracker } from '../lib/trackers.ts'
 
-const check: Tracker = { id: 1, title: 'Зарядка', kind: 'check', target: 1, unit: null, archived_at: null }
-const pages: Tracker = { id: 2, title: 'Страницы', kind: 'number', target: 10, unit: 'стр.', archived_at: null }
+const check: Tracker = {
+  id: 1, title: 'Зарядка', description: null,
+  kind: 'check', target: 1, unit: null, archived_at: null,
+}
+const pages: Tracker = {
+  id: 2, title: 'Страницы', description: 'читаем про психологию',
+  kind: 'number', target: 10, unit: 'стр.', archived_at: null,
+}
 
 describe('mainScreen', () => {
   it('рисует галочки, числа и счётчик выполненного', () => {
@@ -1899,6 +2085,20 @@ describe('mainScreen', () => {
     const { text, keyboard } = mainScreen({ day: '2026-09-10', trackers: [], state: new Map() })
     expect(text).toContain('Доступ пока не выдан')
     expect(keyboard.inline_keyboard).toEqual([])
+  })
+})
+
+describe('infoScreen', () => {
+  it('показывает описание, цель и единицу; трекер без описания — одним названием', () => {
+    const text = infoScreen([check, pages])
+    expect(text).toContain('Страницы — читаем про психологию')
+    expect(text).toContain('цель 10 стр.')
+    expect(text).toContain('Зарядка')
+    expect(text).not.toContain('Зарядка —')
+  })
+
+  it('без трекеров объясняет, а не молчит', () => {
+    expect(infoScreen([])).toContain('Пока нет трекеров')
   })
 })
 
@@ -2015,9 +2215,24 @@ export function mainScreen(args: {
   rows.push([
     { text: '📈 Моя статистика', callback_data: 's:me' },
     { text: '👥 Группа', callback_data: 's:g' },
+    { text: 'ℹ️ Трекеры', callback_data: 's:info' },
   ])
 
   return { text, keyboard: { inline_keyboard: rows } }
+}
+
+// Описание не влезает на кнопку, поэтому живёт на отдельном экране: без него человек
+// не понимает, что за «Книга» и сколько именно от него хотят.
+export function infoScreen(trackers: Tracker[]): string {
+  if (trackers.length === 0) return 'Пока нет трекеров.'
+
+  const lines = trackers.map((t) => {
+    const goal = t.kind === 'number' ? ` (цель ${num(t.target)} ${t.unit ?? ''})`.trimEnd() : ''
+    return t.description
+      ? `• ${t.title} — ${t.description}${goal}`
+      : `• ${t.title}${goal}`
+  })
+  return `Что отмечаем:\n${lines.join('\n')}`
 }
 
 export function statsScreen(stats: TrackerStats[]): string {
@@ -2182,6 +2397,7 @@ describe('отметки', () => {
     const check = await createTracker(h.db, { title: 'Зарядка', kind: 'check' })
     const pages = await createTracker(h.db, {
       title: 'Страницы', kind: 'number', target: 10, unit: 'стр.',
+      description: 'читаем про психологию',
     })
     await setGroupTracker(h.db, g.id, check.id, true)
     await setGroupTracker(h.db, g.id, pages.id, true)
@@ -2222,6 +2438,22 @@ describe('отметки', () => {
     expect(row.value).toBe(7)
   })
 
+  it('запрос числа объясняет, о чём трекер', async () => {
+    const { bot, calls, pages } = await ready()
+    await bot.handleUpdate(tap(`t:${pages.id}`))
+    const prompt = String(calls.at(-1)?.payload.text)
+    expect(prompt).toContain('читаем про психологию')
+    expect(prompt).toContain('цель 10 стр.')
+  })
+
+  it('экран «ℹ️ Трекеры» показывает описания', async () => {
+    const { bot, calls } = await ready()
+    await bot.handleUpdate(tap('s:info'))
+    const text = String(calls.find((c) => c.method === 'editMessageText')?.payload.text)
+    expect(text).toContain('Страницы — читаем про психологию')
+    expect(text).toContain('Зарядка')
+  })
+
   it('статистика открывается кнопкой', async () => {
     const { bot, calls } = await ready()
     await bot.handleUpdate(tap('s:me'))
@@ -2246,7 +2478,7 @@ import {
 } from '../entries.ts'
 import { userGroups } from '../groups.ts'
 import { groupReport, missingToday } from '../group-stats.ts'
-import { groupScreen, groupsKeyboard, mainScreen, statsScreen } from '../menu.ts'
+import { groupScreen, groupsKeyboard, infoScreen, mainScreen, statsScreen } from '../menu.ts'
 import { userStats, weekStart } from '../stats.ts'
 import { activeTrackersForUser } from '../trackers.ts'
 import { num } from '../text.ts'
@@ -2301,8 +2533,9 @@ export function registerUser(bot: Bot, deps: BotDeps): void {
       if (tracker.kind === 'number') {
         await setPending(deps.db, userId, tracker.id)
         await ctx.answerCallbackQuery()
+        const about = tracker.description ? ` — ${tracker.description}` : ''
         await ctx.reply(
-          `Сколько — ${tracker.title.toLowerCase()}? Пришлите число (например 12).`,
+          `${tracker.title}${about}. Сколько сегодня? Пришлите число (цель ${num(tracker.target)} ${tracker.unit ?? ''}).`.replace(/\s+\)/, ')'),
           { reply_markup: { force_reply: true } },
         )
         return
@@ -2318,6 +2551,16 @@ export function registerUser(bot: Bot, deps: BotDeps): void {
       await ctx.answerCallbackQuery()
       const stats = await userStats(deps.db, userId, day)
       await ctx.editMessageText(statsScreen(stats), {
+        parse_mode: 'HTML',
+        reply_markup: { inline_keyboard: [[{ text: '← Назад', callback_data: 'back' }]] },
+      })
+      return
+    }
+
+    if (data === 's:info') {
+      await ctx.answerCallbackQuery()
+      const trackers = await activeTrackersForUser(deps.db, userId)
+      await ctx.editMessageText(infoScreen(trackers), {
         parse_mode: 'HTML',
         reply_markup: { inline_keyboard: [[{ text: '← Назад', callback_data: 'back' }]] },
       })
@@ -2811,7 +3054,7 @@ git commit -m "feat: telegram webhook and setup route"
   - `title(raw: unknown): string` — бросает `BadRequest` при провале
   - `id(raw: unknown): number`
   - `flag(raw: unknown): boolean`
-  - `trackerInput(raw: unknown): { title: string; kind: 'check' | 'number'; target: number; unit: string | null }`
+  - `trackerInput(raw: unknown): { title: string; kind: 'check' | 'number'; target: number; unit: string | null; description: string | null }`
   - `class BadRequest extends Error`
 
 - [ ] **Step 1: Написать падающий тест `tests/auth.test.ts`**
@@ -2901,14 +3144,22 @@ describe('validate', () => {
 
   it('trackerInput требует цель и единицу у числового', () => {
     expect(trackerInput({ title: 'Зарядка', kind: 'check' })).toEqual({
-      title: 'Зарядка', kind: 'check', target: 1, unit: null,
+      title: 'Зарядка', kind: 'check', target: 1, unit: null, description: null,
     })
     expect(trackerInput({ title: 'Страницы', kind: 'number', target: 10, unit: 'стр.' })).toEqual({
-      title: 'Страницы', kind: 'number', target: 10, unit: 'стр.',
+      title: 'Страницы', kind: 'number', target: 10, unit: 'стр.', description: null,
     })
     expect(() => trackerInput({ title: 'Страницы', kind: 'number', target: 0, unit: 'стр.' })).toThrow(BadRequest)
     expect(() => trackerInput({ title: 'Страницы', kind: 'number', target: 10 })).toThrow(BadRequest)
     expect(() => trackerInput({ title: 'X', kind: 'weird' })).toThrow(BadRequest)
+  })
+
+  it('trackerInput принимает описание и режет слишком длинное', () => {
+    expect(trackerInput({ title: 'Книга', kind: 'check', description: '  читаем  про психологию ' }))
+      .toEqual({ title: 'Книга', kind: 'check', target: 1, unit: null, description: 'читаем про психологию' })
+    expect(trackerInput({ title: 'Книга', kind: 'check', description: '   ' }).description).toBeNull()
+    expect(() => trackerInput({ title: 'Книга', kind: 'check', description: 'x'.repeat(201) }))
+      .toThrow(BadRequest)
   })
 })
 ```
@@ -2994,20 +3245,31 @@ export function flag(raw: unknown): boolean {
   return raw
 }
 
+export function description(raw: unknown): string | null {
+  const s = String(raw ?? '').trim().replace(/\s+/g, ' ')
+  if (!s) return null
+  if (s.length > 200) throw new BadRequest('Описание: не больше 200 символов')
+  return s
+}
+
 export function trackerInput(raw: unknown): {
   title: string; kind: 'check' | 'number'; target: number; unit: string | null
+  description: string | null
 } {
   const o = (raw ?? {}) as Record<string, unknown>
   const kind = o.kind
   if (kind !== 'check' && kind !== 'number') throw new BadRequest('Тип: галочка или число')
+  const about = description(o.description)
 
-  if (kind === 'check') return { title: title(o.title), kind, target: 1, unit: null }
+  if (kind === 'check') {
+    return { title: title(o.title), kind, target: 1, unit: null, description: about }
+  }
 
   const target = Number(o.target)
   if (!Number.isFinite(target) || target <= 0) throw new BadRequest('Цель должна быть больше нуля')
   const unit = String(o.unit ?? '').trim()
   if (!unit) throw new BadRequest('Укажите единицу измерения, например «стр.»')
-  return { title: title(o.title), kind, target, unit }
+  return { title: title(o.title), kind, target, unit, description: about }
 }
 ```
 
@@ -3256,7 +3518,9 @@ export async function trackersAction(db: Db, body: unknown): Promise<Bootstrap['
     }
     case 'update': {
       const t = trackerInput(o)
-      await updateTracker(db, id(o.trackerId), { title: t.title, target: t.target, unit: t.unit })
+      await updateTracker(db, id(o.trackerId), {
+        title: t.title, target: t.target, unit: t.unit, description: t.description,
+      })
       break
     }
     case 'archive':
@@ -3762,7 +4026,9 @@ import type { Bootstrap } from '@/lib/admin.ts'
 
 export default function Trackers(props: { data: Bootstrap; onAction: (body: object) => void }) {
   const { data } = props
-  const [form, setForm] = useState({ title: '', kind: 'check' as 'check' | 'number', target: '10', unit: '' })
+  const [form, setForm] = useState({
+    title: '', description: '', kind: 'check' as 'check' | 'number', target: '10', unit: '',
+  })
 
   const groupTitle = (id: number) => data.groups.find((g) => g.id === id)?.title ?? `#${id}`
 
@@ -3771,9 +4037,16 @@ export default function Trackers(props: { data: Bootstrap; onAction: (body: obje
       <section className="space-y-2 rounded-xl border border-black/10 p-3 dark:border-white/15">
         <input
           className="w-full rounded border border-black/20 px-2 py-1 text-sm dark:border-white/20 dark:bg-transparent"
-          placeholder="Название трекера"
+          placeholder="Название на кнопку, например «Книга»"
           value={form.title}
           onChange={(e) => setForm({ ...form, title: e.target.value })}
+        />
+        <input
+          className="w-full rounded border border-black/20 px-2 py-1 text-sm dark:border-white/20 dark:bg-transparent"
+          placeholder="Описание: читаем про психологию, 10 стр. в день"
+          maxLength={200}
+          value={form.description}
+          onChange={(e) => setForm({ ...form, description: e.target.value })}
         />
         <div className="flex gap-2 text-sm">
           <select
@@ -3804,10 +4077,10 @@ export default function Trackers(props: { data: Bootstrap; onAction: (body: obje
             className="ml-auto rounded bg-blue-600 px-3 text-white"
             onClick={() => {
               props.onAction({
-                action: 'create', title: form.title, kind: form.kind,
-                target: Number(form.target), unit: form.unit,
+                action: 'create', title: form.title, description: form.description,
+                kind: form.kind, target: Number(form.target), unit: form.unit,
               })
-              setForm({ title: '', kind: 'check', target: '10', unit: '' })
+              setForm({ title: '', description: '', kind: 'check', target: '10', unit: '' })
             }}
           >
             Создать
@@ -3823,6 +4096,7 @@ export default function Trackers(props: { data: Bootstrap; onAction: (body: obje
               архивировать
             </button>
           </div>
+          {t.description && <div className="mt-1 text-xs opacity-80">{t.description}</div>}
           <div className="mt-1 text-xs opacity-70">
             {t.kind === 'number' ? `число, цель ${t.target} ${t.unit ?? ''}` : 'галочка'}
             {' · '}
@@ -4318,7 +4592,8 @@ git commit -m "feat: evening reminders, weekly group reports and deploy config"
 | Раздел спеки | Задачи |
 |---|---|
 | §3 Архитектура, переменные окружения | 1, 10 |
-| §4 Данные, правила модели | 1, 3, 4 |
+| §4 Данные, правила модели | 1, 3, 3b, 4 |
+| §4 Описание трекера, §6 экран «ℹ️ Трекеры» | 3b, 7, 8, 11, 13 |
 | §5 Статистика | 5, 6 |
 | §6 Бот: онбординг, имя, экраны, `/bind` | 2, 7, 8, 9 |
 | §7 Mini App: доступ, экраны, API | 11, 12, 13 |

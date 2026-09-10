@@ -10,7 +10,11 @@ export async function toggleCheck(
   // параллельный вызов того же тоггла (двойной тап, повтор апдейта от
   // Telegram) дожидается этой блокировки и видит уже изменённое состояние,
   // поэтому INSERT ... WHERE NOT EXISTS не вставит вторую строку и не
-  // вернёт нас в "поставлено" вместо исходного "снято".
+  // вернёт нас в "поставлено" вместо исходного "снято". Если же строки не
+  // было изначально, оба параллельных DELETE не берут блокировку (нечего
+  // блокировать) и оба уходят в INSERT — ON CONFLICT DO NOTHING гасит
+  // гонку между ними без исключения: проигравший вызов вернёт 0 строк,
+  // то есть { done: false }, а не 23505 unique_violation.
   const rows = await db.q(
     `with del as (
        delete from entries
@@ -20,6 +24,7 @@ export async function toggleCheck(
      insert into entries (user_id, tracker_id, day, value)
      select $1, $2, $3::date, 1
       where not exists (select 1 from del)
+     on conflict (user_id, tracker_id, day) do nothing
      returning value`,
     [userId, trackerId, day],
   )

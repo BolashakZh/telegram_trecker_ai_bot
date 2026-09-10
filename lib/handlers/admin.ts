@@ -4,10 +4,9 @@ import { groupsKeyboard } from '../menu.ts'
 import type { BotDeps } from './user.ts'
 
 export function registerAdmin(bot: Bot, deps: BotDeps): void {
-  // Обработчик /bind команды для админов в сообщениях
   bot.on('message:text', async (ctx, next) => {
     const text = ctx.message.text.trim()
-    if (text === '/bind') {
+    if (text.startsWith('/bind')) {
       if (!deps.adminIds.includes(ctx.from!.id)) return
       const groups = await listGroups(deps.db)
       if (groups.length === 0) {
@@ -19,7 +18,6 @@ export function registerAdmin(bot: Bot, deps: BotDeps): void {
       })
       return
     }
-    // Пропускаем обработку для других сообщений
     await next()
   })
 
@@ -30,9 +28,19 @@ export function registerAdmin(bot: Bot, deps: BotDeps): void {
     }
     const groupId = Number(ctx.match![1])
     const chatId = ctx.chat!.id
+
+    // Проверяем, что группа активна
+    const allGroups = await listGroups(deps.db, { includeArchived: true })
+    const group = allGroups.find((g) => g.id === groupId)
+
+    if (!group || group.archived_at !== null) {
+      await ctx.answerCallbackQuery({ text: 'Группа больше не активна' })
+      await ctx.editMessageText('Группа архивирована и больше не доступна.')
+      return
+    }
+
     await bindChat(deps.db, groupId, chatId)
-    const group = (await listGroups(deps.db)).find((g) => g.id === groupId)
     await ctx.answerCallbackQuery({ text: 'Привязано' })
-    await ctx.editMessageText(`Чат привязан к группе «${group?.title ?? groupId}». Итоги недели буду присылать сюда по воскресеньям.`)
+    await ctx.editMessageText(`Чат привязан к группе «${group.title}». Итоги недели буду присылать сюда по воскресеньям.`)
   })
 }

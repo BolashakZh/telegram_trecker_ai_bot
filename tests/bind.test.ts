@@ -69,4 +69,53 @@ describe('/bind', () => {
     expect(calls).toHaveLength(0)
     expect((await listGroups(db))[0].chat_id).toBeNull()
   })
+
+  it('не-админ нажимает кнопку привязки', async () => {
+    const { db, bot, calls } = await harness()
+    const g = await createGroup(db, 'Утро')
+
+    // Админ вызывает /bind
+    await bot.handleUpdate(groupMessage('/bind', 99))
+    expect(JSON.stringify(calls.at(-1)?.payload.reply_markup)).toContain(`b:${g.id}`)
+
+    // Посторонний нажимает кнопку
+    calls.length = 0
+    await bot.handleUpdate(groupTap(`b:${g.id}`, 7))
+
+    // Проверяем, что ответ об ошибке отправлен
+    const answerCall = calls.find((c) => c.method === 'answerCallbackQuery')
+    expect(answerCall?.payload.text).toBe('Только для админов')
+
+    // Чат не привязан
+    expect((await listGroups(db))[0].chat_id).toBeNull()
+  })
+
+  it('при пустом списке групп показывает подсказку', async () => {
+    const { bot, calls } = await harness()
+
+    await bot.handleUpdate(groupMessage('/bind', 99))
+    const text = String(calls.at(-1)?.payload.text)
+    expect(text).toBe('Сначала создайте группу в админке.')
+  })
+
+  it('перепривязка переходит от группы A к группе B', async () => {
+    const { db, bot, calls } = await harness()
+    const g1 = await createGroup(db, 'Утро')
+    const g2 = await createGroup(db, 'Вечер')
+
+    // Привязываем к первой группе
+    await bot.handleUpdate(groupMessage('/bind', 99))
+    await bot.handleUpdate(groupTap(`b:${g1.id}`, 99))
+    expect((await listGroups(db)).find((g) => g.id === g1.id)?.chat_id).toBe(-100500)
+
+    // Перепривязываем ко второй группе
+    calls.length = 0
+    await bot.handleUpdate(groupMessage('/bind', 99))
+    await bot.handleUpdate(groupTap(`b:${g2.id}`, 99))
+
+    // Проверяем, что чат только у второй группы
+    const groups = await listGroups(db)
+    expect(groups.find((g) => g.id === g1.id)?.chat_id).toBeNull()
+    expect(groups.find((g) => g.id === g2.id)?.chat_id).toBe(-100500)
+  })
 })

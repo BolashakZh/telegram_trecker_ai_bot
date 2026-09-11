@@ -90,7 +90,7 @@ Runtime всех роутов — Node.js (не Edge): `grammy` и HTTP-драй
 | `BOT_TOKEN` | токен бота от BotFather |
 | `DATABASE_URL` | строка подключения Neon (ставится Marketplace-интеграцией) |
 | `ADMIN_IDS` | Telegram user id админов через запятую |
-| `TZ` | IANA-зона, например `Asia/Almaty`; **при её смене правится и cron-выражение в `vercel.json`** |
+| `APP_TZ` | IANA-зона, например `Asia/Almaty`; имя `TZ` зарезервировано Vercel. **При её смене правится и cron-выражение в `vercel.json`** |
 | `WEBHOOK_SECRET` | секрет для `setWebhook(secret_token)` |
 | `SETUP_SECRET` | ключ для вызова `/api/setup` |
 | `CRON_SECRET` | Vercel сам шлёт его роутам крона в `Authorization: Bearer` |

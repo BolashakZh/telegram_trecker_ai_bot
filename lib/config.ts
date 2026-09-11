@@ -7,7 +7,8 @@ function req(name: string): string {
 export const config = {
   botToken: () => req('BOT_TOKEN'),
   databaseUrl: () => req('DATABASE_URL'),
-  tz: () => process.env.TZ || 'Asia/Almaty',
+  // TZ зарезервирован Vercel и не задаётся в проекте — поэтому APP_TZ; локально сойдёт и TZ.
+  tz: () => process.env.APP_TZ || process.env.TZ || 'Asia/Almaty',
   adminIds: () =>
     (process.env.ADMIN_IDS ?? '')
       .split(',')

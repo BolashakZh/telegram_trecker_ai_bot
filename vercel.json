@@ -1,4 +1,5 @@
 {
+  "framework": "nextjs",
   "crons": [
     { "path": "/api/cron/reminder", "schedule": "0 16 * * *" },
     { "path": "/api/cron/weekly", "schedule": "0 15 * * 0" }

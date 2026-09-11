@@ -10,10 +10,10 @@ describe('bar', () => {
 })
 
 describe('formatDay / formatRange', () => {
-  it('пишет дату по-русски', () => {
-    expect(formatDay('2026-09-10')).toBe('четверг, 10 сентября')
-    expect(formatRange('2026-09-07', '2026-09-13')).toBe('7–13 сентября')
-    expect(formatRange('2026-08-31', '2026-09-06')).toBe('31 августа – 6 сентября')
+  it('пишет дату по-казахски', () => {
+    expect(formatDay('2026-09-10')).toBe('бейсенбі, 10 қыркүйек')
+    expect(formatRange('2026-09-07', '2026-09-13')).toBe('7–13 қыркүйек')
+    expect(formatRange('2026-08-31', '2026-09-06')).toBe('31 тамыз – 6 қыркүйек')
   })
 })
 
@@ -30,7 +30,7 @@ describe('clip', () => {
     const text = Array.from({ length: 500 }, (_, i) => `строка номер ${i}`).join('\n')
     const out = clip(text, 200)
     expect(out.length).toBeLessThanOrEqual(200)
-    expect(out).toMatch(/…и ещё \d+ строк/)
+    expect(out).toMatch(/…тағы \d+ жол/)
   })
 
   it('короткий текст не трогает', () => {

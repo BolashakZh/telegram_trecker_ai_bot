@@ -21,8 +21,8 @@ describe('mainScreen', () => {
     ])
     const { text, keyboard } = mainScreen({ day: '2026-09-10', trackers: [check, pages], state })
 
-    expect(text).toContain('четверг, 10 сентября')
-    expect(text).toContain('Выполнено 1 из 2')
+    expect(text).toContain('бейсенбі, 10 қыркүйек')
+    expect(text).toContain('Орындалды: 1/2')
     const labels = keyboard.inline_keyboard.flat().map((b) => b.text)
     expect(labels).toContain('✅ Зарядка')
     expect(labels).toContain('⬜️ Страницы 4/10')
@@ -32,7 +32,7 @@ describe('mainScreen', () => {
 
   it('без трекеров показывает объяснение, а не пустой экран', () => {
     const { text, keyboard } = mainScreen({ day: '2026-09-10', trackers: [], state: new Map() })
-    expect(text).toContain('Доступ пока не выдан')
+    expect(text).toContain('Рұқсат әзірге берілмеген')
     expect(keyboard.inline_keyboard).toEqual([])
   })
 })
@@ -41,7 +41,7 @@ describe('infoScreen', () => {
   it('показывает описание, цель и единицу; трекер без описания — одним названием', () => {
     const text = infoScreen([check, pages])
     expect(text).toContain('Страницы — читаем про психологию')
-    expect(text).toContain('цель 10 стр.')
+    expect(text).toContain('мақсат 10 стр.')
     expect(text).toContain('Зарядка')
     expect(text).not.toContain('Зарядка —')
   })
@@ -68,7 +68,7 @@ describe('infoScreen', () => {
   })
 
   it('без трекеров объясняет, а не молчит', () => {
-    expect(infoScreen([])).toContain('Пока нет трекеров')
+    expect(infoScreen([])).toContain('Әзірге трекер жоқ')
   })
 
   it('числовой трекер без единицы не имеет лишний пробел', () => {
@@ -78,8 +78,8 @@ describe('infoScreen', () => {
     }
     const text = infoScreen([noUnit])
     expect(text).toContain('Подходы')
-    expect(text).toContain('цель 5)')
-    expect(text).not.toMatch(/цель 5 \)/)
+    expect(text).toContain('мақсат 5)')
+    expect(text).not.toMatch(/мақсат 5 \)/)
   })
 })
 
@@ -154,15 +154,15 @@ describe('groupScreen', () => {
     const missing = [{ name: 'Юра', titles: ['Зарядка', 'Страницы'] }]
     const text = groupScreen(report, 10, missing)
 
-    expect(text).toContain('Группа «Друзья»')
-    expect(text).toContain('7–13 сентября')
-    expect(text).toContain('Вы')
+    expect(text).toContain('«Друзья» тобы')
+    expect(text).toContain('7–13 қыркүйек')
+    expect(text).toContain('Сіз')
     expect(text).not.toContain('Айгуль')
     expect(text).toContain('Марат')
     expect(text).toContain('100%')
     expect(text).toContain('71%')
     expect(text).toContain('43%')
-    expect(text).toContain('Сегодня не отметились')
+    expect(text).toContain('Бүгін белгілемегендер')
     expect(text).toContain('Юра')
     expect(text).toContain('Зарядка, Страницы')
   })
@@ -183,8 +183,8 @@ describe('groupScreen', () => {
     }
     const text = groupScreen(report, 10, [])
 
-    expect(text).toContain('Сегодня отметились все')
-    expect(text).not.toContain('Сегодня не отметились')
+    expect(text).toContain('Бүгін барлығы белгіледі')
+    expect(text).not.toContain('Бүгін белгілемегендер')
   })
 
   it('экранирует HTML в названии группы, имени участника и названии трекера', () => {

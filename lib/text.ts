@@ -17,9 +17,9 @@ export function esc(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 }
 
-const MONTHS = ['января','февраля','марта','апреля','мая','июня',
-  'июля','августа','сентября','октября','ноября','декабря']
-const WEEKDAYS = ['воскресенье','понедельник','вторник','среда','четверг','пятница','суббота']
+const MONTHS = ['қаңтар','ақпан','наурыз','сәуір','мамыр','маусым',
+  'шілде','тамыз','қыркүйек','қазан','қараша','желтоқсан']
+const WEEKDAYS = ['жексенбі','дүйсенбі','сейсенбі','сәрсенбі','бейсенбі','жұма','сенбі']
 
 export function bar(percent: number, width = 7): string {
   const filled = Math.round((Math.min(100, Math.max(0, percent)) / 100) * width)
@@ -54,10 +54,10 @@ export function clip(text: string, limit = 4096): string {
   const kept: string[] = []
   let size = 0
   for (const line of lines) {
-    const tail = `\n…и ещё ${lines.length - kept.length} строк`
+    const tail = `\n…тағы ${lines.length - kept.length} жол`
     if (size + line.length + 1 + tail.length > limit) break
     kept.push(line)
     size += line.length + 1
   }
-  return `${kept.join('\n')}\n…и ещё ${lines.length - kept.length} строк`
+  return `${kept.join('\n')}\n…тағы ${lines.length - kept.length} жол`
 }

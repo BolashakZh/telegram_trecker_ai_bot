@@ -61,7 +61,7 @@ export function registerUser(bot: Bot, deps: BotDeps): void {
       const trackers = await activeTrackersForUser(deps.db, userId)
       const tracker = trackers.find((t) => t.id === trackerId)
       if (!tracker) {
-        await ctx.answerCallbackQuery({ text: 'Трекер больше не активен' })
+        await ctx.answerCallbackQuery({ text: 'Бұл трекер енді белсенді емес' })
         await showMain(ctx, deps, { edit: true })
         return
       }
@@ -71,14 +71,14 @@ export function registerUser(bot: Bot, deps: BotDeps): void {
         await ctx.answerCallbackQuery()
         const about = tracker.description ? ` — ${tracker.description}` : ''
         await ctx.reply(
-          `${tracker.title}${about}. Сколько сегодня? Пришлите число (цель ${num(tracker.target)} ${tracker.unit ?? ''}).`.replace(/\s+\)/, ')'),
+          `${tracker.title}${about}. Бүгін қанша? Сан жіберіңіз (мақсат ${num(tracker.target)} ${tracker.unit ?? ''}).`.replace(/\s+\)/, ')'),
           { reply_markup: { force_reply: true } },
         )
         return
       }
 
       const { done } = await toggleCheck(deps.db, userId, tracker.id, day)
-      await ctx.answerCallbackQuery({ text: done ? 'Отмечено ✅' : 'Снято' })
+      await ctx.answerCallbackQuery({ text: done ? 'Белгіленді ✅' : 'Алынды' })
       await showMain(ctx, deps, { edit: true })
       return
     }
@@ -88,7 +88,7 @@ export function registerUser(bot: Bot, deps: BotDeps): void {
       const stats = await userStats(deps.db, userId, day)
       await ctx.editMessageText(statsScreen(stats), {
         parse_mode: 'HTML',
-        reply_markup: { inline_keyboard: [[{ text: '← Назад', callback_data: 'back' }]] },
+        reply_markup: { inline_keyboard: [[{ text: '← Артқа', callback_data: 'back' }]] },
       })
       return
     }
@@ -98,7 +98,7 @@ export function registerUser(bot: Bot, deps: BotDeps): void {
       const trackers = await activeTrackersForUser(deps.db, userId)
       await ctx.editMessageText(infoScreen(trackers), {
         parse_mode: 'HTML',
-        reply_markup: { inline_keyboard: [[{ text: '← Назад', callback_data: 'back' }]] },
+        reply_markup: { inline_keyboard: [[{ text: '← Артқа', callback_data: 'back' }]] },
       })
       return
     }
@@ -107,7 +107,7 @@ export function registerUser(bot: Bot, deps: BotDeps): void {
       await ctx.answerCallbackQuery()
       const groups = await userGroups(deps.db, userId)
       if (groups.length === 0) {
-        await ctx.editMessageText('Вы пока не состоите ни в одной группе.')
+        await ctx.editMessageText('Сіз әзірге ешбір топта емессіз.')
         return
       }
 
@@ -116,7 +116,7 @@ export function registerUser(bot: Bot, deps: BotDeps): void {
         : groups.length === 1 ? groups[0] : undefined
 
       if (!chosen) {
-        await ctx.editMessageText('Выберите группу:', {
+        await ctx.editMessageText('Топты таңдаңыз:', {
           reply_markup: groupsKeyboard(groups, 's:g:'),
         })
         return
@@ -126,7 +126,7 @@ export function registerUser(bot: Bot, deps: BotDeps): void {
       const missing = await missingToday(deps.db, chosen.id, day)
       await ctx.editMessageText(groupScreen(report, userId, missing), {
         parse_mode: 'HTML',
-        reply_markup: { inline_keyboard: [[{ text: '← Назад', callback_data: 'back' }]] },
+        reply_markup: { inline_keyboard: [[{ text: '← Артқа', callback_data: 'back' }]] },
       })
       return
     }
@@ -157,15 +157,15 @@ export function registerUser(bot: Bot, deps: BotDeps): void {
     // 1. Нет имени — всё, что человек пишет, считается ответом на вопрос об имени.
     if (!user.display_name) {
       if (text === '/start') {
-        await ctx.reply('Здравствуйте! Как вас зовут? Напишите имя и фамилию — так в группе поймут, кто вы.')
+        await ctx.reply('Сәлеметсіз бе! Атыңыз кім? Аты-жөніңізді жазыңыз — топта сізді осылай таниды.')
         return
       }
       const res = await setDisplayName(deps.db, tg.id, text, { byAdmin: false })
       if (!res.ok) {
-        await ctx.reply('Напишите имя буквами, например: Айгуль Смагулова')
+        await ctx.reply('Атыңызды әріппен жазыңыз, мысалы: Айгүл Смағұлова')
         return
       }
-      await ctx.reply(`Приятно познакомиться, ${res.name}!`)
+      await ctx.reply(`Танысқаныма қуаныштымын, ${res.name}!`)
       await notifyAdmins(ctx, deps, res.name)
       await showMain(ctx, deps)
       return
@@ -176,14 +176,14 @@ export function registerUser(bot: Bot, deps: BotDeps): void {
     if (pendingId !== null && !text.startsWith('/')) {
       const value = parseNumber(text)
       if (value === null) {
-        await ctx.reply('Нужно число, например 12')
+        await ctx.reply('Сан керек, мысалы 12')
         return
       }
       const trackers = await activeTrackersForUser(deps.db, tg.id)
       const tracker = trackers.find((t) => t.id === pendingId)
       await clearPending(deps.db, tg.id)
       if (!tracker) {
-        await ctx.reply('Трекер больше не активен')
+        await ctx.reply('Бұл трекер енді белсенді емес')
         await showMain(ctx, deps)
         return
       }
@@ -191,8 +191,8 @@ export function registerUser(bot: Bot, deps: BotDeps): void {
       const res = await setValue(deps.db, tg.id, tracker.id, day, value)
       await ctx.reply(
         res.cleared
-          ? `Отметка снята: ${tracker.title}`
-          : `Записано: ${num(value)} ${tracker.unit ?? ''} ${res.done ? '✅' : ''} (цель ${num(tracker.target)})`.trim(),
+          ? `Белгі алынды: ${tracker.title}`
+          : `Жазылды: ${num(value)} ${tracker.unit ?? ''} ${res.done ? '✅' : ''} (мақсат ${num(tracker.target)})`.trim(),
       )
       await showMain(ctx, deps)
       return
@@ -202,9 +202,9 @@ export function registerUser(bot: Bot, deps: BotDeps): void {
     if (text.startsWith('/name')) {
       const raw = text.slice('/name'.length).trim()
       const res = await setDisplayName(deps.db, tg.id, raw, { byAdmin: false })
-      if (res.ok) await ctx.reply(`Готово, теперь вы ${res.name}`)
-      else if (res.reason === 'locked') await ctx.reply('Ваше имя задал администратор, напишите ему')
-      else await ctx.reply('Напишите так: /name Айгуль Смагулова')
+      if (res.ok) await ctx.reply(`Дайын, енді сіз — ${res.name}`)
+      else if (res.reason === 'locked') await ctx.reply('Атыңызды әкімші орнатқан, оған хабарласыңыз')
+      else await ctx.reply('Былай жазыңыз: /name Айгүл Смағұлова')
       return
     }
 

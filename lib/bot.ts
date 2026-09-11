@@ -12,9 +12,9 @@ export function createBot(token: string, deps: BotDeps, botInfo?: UserFromGetMe)
     console.error('bot error', err.error)
     const ctx = err.ctx
     if (ctx.callbackQuery) {
-      void ctx.answerCallbackQuery({ text: 'Что-то пошло не так, попробуйте ещё раз' })
+      void ctx.answerCallbackQuery({ text: 'Бірдеңе дұрыс болмады, қайта көріңіз' })
     } else if (ctx.chat) {
-      void ctx.reply('Что-то пошло не так, попробуйте ещё раз')
+      void ctx.reply('Бірдеңе дұрыс болмады, қайта көріңіз')
     }
   })
 

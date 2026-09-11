@@ -15,15 +15,15 @@ export function mainScreen(args: {
 
   if (trackers.length === 0) {
     return {
-      text: 'Доступ пока не выдан: администратор уже получил уведомление.',
+      text: 'Рұқсат әзірге берілмеген: әкімші хабарлама алды.',
       keyboard: { inline_keyboard: [] },
     }
   }
 
   const done = trackers.filter((t) => state.get(t.id)?.done).length
   const text = [
-    `Сегодня, ${formatDay(day)}`,
-    `Выполнено ${done} из ${trackers.length}  ${bar(Math.round((done / trackers.length) * 100), 5)}`,
+    `Бүгін, ${formatDay(day)}`,
+    `Орындалды: ${done}/${trackers.length}  ${bar(Math.round((done / trackers.length) * 100), 5)}`,
   ].join('\n')
 
   const rows = trackers.map((t) => {
@@ -36,9 +36,9 @@ export function mainScreen(args: {
   })
 
   rows.push([
-    { text: '📈 Моя статистика', callback_data: 's:me' },
-    { text: '👥 Группа', callback_data: 's:g' },
-    { text: 'ℹ️ Трекеры', callback_data: 's:info' },
+    { text: '📈 Менің статистикам', callback_data: 's:me' },
+    { text: '👥 Топ', callback_data: 's:g' },
+    { text: 'ℹ️ Трекерлер', callback_data: 's:info' },
   ])
 
   return { text, keyboard: { inline_keyboard: rows } }
@@ -47,19 +47,19 @@ export function mainScreen(args: {
 // Описание не влезает на кнопку, поэтому живёт на отдельном экране: без него человек
 // не понимает, что за «Книга» и сколько именно от него хотят.
 export function infoScreen(trackers: Tracker[]): string {
-  if (trackers.length === 0) return 'Пока нет трекеров.'
+  if (trackers.length === 0) return 'Әзірге трекер жоқ.'
 
   const lines = trackers.map((t) => {
-    const goal = t.kind === 'number' ? ` (цель ${num(t.target)}${t.unit ? ` ${esc(t.unit)}` : ''})` : ''
+    const goal = t.kind === 'number' ? ` (мақсат ${num(t.target)}${t.unit ? ` ${esc(t.unit)}` : ''})` : ''
     return t.description
       ? `• ${esc(t.title)} — ${esc(t.description)}${goal}`
       : `• ${esc(t.title)}${goal}`
   })
-  return clip(`Что отмечаем:\n${lines.join('\n')}`)
+  return clip(`Не белгілейміз:\n${lines.join('\n')}`)
 }
 
 export function statsScreen(stats: TrackerStats[]): string {
-  if (stats.length === 0) return 'Пока нет трекеров.'
+  if (stats.length === 0) return 'Әзірге трекер жоқ.'
 
   const width = Math.max(...stats.map((s) => s.tracker.title.length)) + 1
   const lines: string[] = []
@@ -67,12 +67,12 @@ export function statsScreen(stats: TrackerStats[]): string {
     const week = bar(s.expected_week ? (s.done_week / s.expected_week) * 100 : 0)
     const month = s.expected_month ? Math.round((s.done_month / s.expected_month) * 100) : 0
     lines.push(
-      `${padRight(s.tracker.title, width)} неделя ${week} ${s.done_week}/${s.expected_week}` +
-      `   серия ${s.streak}   месяц ${month}%`,
+      `${padRight(s.tracker.title, width)} апта ${week} ${s.done_week}/${s.expected_week}` +
+      `   қатар ${s.streak}   ай ${month}%`,
     )
     if (s.tracker.kind === 'number') {
       const goal = num(s.tracker.target * s.expected_week)
-      lines.push(`${' '.repeat(width)} за неделю ${num(s.sum_week)} ${s.tracker.unit ?? ''} (цель ${goal})`)
+      lines.push(`${' '.repeat(width)} аптада ${num(s.sum_week)} ${s.tracker.unit ?? ''} (мақсат ${goal})`)
     }
   }
   // Экранируем контент целиком (числа/бары спецсимволов не содержат — экранирование
@@ -92,15 +92,15 @@ export function groupScreen(
   // (неэкранированному) имени, поэтому выравнивание не съезжает, а экранирование
   // применяется к готовой строке целиком (цифры и бар спецсимволов не содержат).
   const rows = report.members.map((m) =>
-    esc(`${padRight(m.user_id === viewerId ? 'Вы' : m.name, width)}${bar(m.percent)} ${String(m.percent).padStart(3)}%`),
+    esc(`${padRight(m.user_id === viewerId ? 'Сіз' : m.name, width)}${bar(m.percent)} ${String(m.percent).padStart(3)}%`),
   )
-  const head = `Группа «${esc(report.title)}», неделя ${formatRange(report.from, report.to)}`
+  const head = `«${esc(report.title)}» тобы, ${formatRange(report.from, report.to)} аптасы`
   // Хвост растёт линейно по числу пар человек × трекер — режем отдельно от
   // тела <pre>, чтобы обрезка хвоста никогда не задевала закрывающий тег.
   const pre = `<pre>${clip(rows.join('\n'), 2800)}</pre>`
   const tail = missing.length
-    ? `\n${clip(`Сегодня не отметились: ${esc(missing.map((m) => `${m.name} — ${m.titles.join(', ')}`).join('; '))}`, 1000)}`
-    : '\nСегодня отметились все.'
+    ? `\n${clip(`Бүгін белгілемегендер: ${esc(missing.map((m) => `${m.name} — ${m.titles.join(', ')}`).join('; '))}`, 1000)}`
+    : '\nБүгін барлығы белгіледі.'
   return clip(`${head}\n${pre}${tail}`)
 }
 

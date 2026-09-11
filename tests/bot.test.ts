@@ -58,7 +58,7 @@ describe('онбординг', () => {
     const { db, bot, calls } = await harness()
 
     await bot.handleUpdate(message('/start'))
-    expect(calls.at(-1)?.payload.text).toContain('Как вас зовут')
+    expect(calls.at(-1)?.payload.text).toContain('Атыңыз кім')
     expect(calls.some((c) => c.payload.chat_id === 99)).toBe(false)
 
     await bot.handleUpdate(message('Айгуль Смагулова'))
@@ -74,7 +74,7 @@ describe('онбординг', () => {
     await bot.handleUpdate(message('/start'))
     await bot.handleUpdate(message('!!'))
     expect((await getUser(db, 7))?.display_name).toBeNull()
-    expect(calls.at(-1)?.payload.text).toContain('буквами')
+    expect(calls.at(-1)?.payload.text).toContain('әріппен')
   })
 })
 
@@ -101,7 +101,7 @@ describe('отметки', () => {
     await bot.handleUpdate(tap(`t:${check.id}`))
 
     const answer = calls.find((c) => c.method === 'answerCallbackQuery')
-    expect(answer?.payload.text).toBe('Отмечено ✅')
+    expect(answer?.payload.text).toBe('Белгіленді ✅')
     const edit = calls.find((c) => c.method === 'editMessageText')
     expect(JSON.stringify(edit?.payload.reply_markup)).toContain('✅ Зарядка')
   })
@@ -109,20 +109,20 @@ describe('отметки', () => {
   it('тап по числовому просит число, следующее сообщение записывается', async () => {
     const { db, bot, calls, pages } = await ready()
     await bot.handleUpdate(tap(`t:${pages.id}`))
-    expect(calls.at(-1)?.payload.text).toContain('число')
+    expect(calls.at(-1)?.payload.text).toContain('Сан жіберіңіз')
     expect(calls.at(-1)?.payload.reply_markup).toEqual({ force_reply: true })
 
     await bot.handleUpdate(message('12'))
     const [row] = await db.q(`select value::float8 as value from entries where tracker_id = $1`, [pages.id])
     expect(row.value).toBe(12)
-    expect(calls.some((c) => String(c.payload.text ?? '').includes('Записано'))).toBe(true)
+    expect(calls.some((c) => String(c.payload.text ?? '').includes('Жазылды'))).toBe(true)
   })
 
   it('мусор вместо числа не сбрасывает ожидание', async () => {
     const { db, bot, calls, pages } = await ready()
     await bot.handleUpdate(tap(`t:${pages.id}`))
     await bot.handleUpdate(message('много'))
-    expect(calls.at(-1)?.payload.text).toContain('Нужно число')
+    expect(calls.at(-1)?.payload.text).toContain('Сан керек')
 
     await bot.handleUpdate(message('7'))
     const [row] = await db.q(`select value::float8 as value from entries where tracker_id = $1`, [pages.id])
@@ -134,7 +134,7 @@ describe('отметки', () => {
     await bot.handleUpdate(tap(`t:${pages.id}`))
     const prompt = String(calls.at(-1)?.payload.text)
     expect(prompt).toContain('читаем про психологию')
-    expect(prompt).toContain('цель 10 стр.')
+    expect(prompt).toContain('мақсат 10 стр.')
   })
 
   it('экран «ℹ️ Трекеры» показывает описания', async () => {
@@ -160,7 +160,7 @@ describe('отметки', () => {
     expect(rows.length).toBe(0)
 
     const answer = calls.filter((c) => c.method === 'answerCallbackQuery').at(-1)
-    expect(answer?.payload.text).toBe('Снято')
+    expect(answer?.payload.text).toBe('Алынды')
     const edit = calls.filter((c) => c.method === 'editMessageText').at(-1)
     expect(JSON.stringify(edit?.payload.reply_markup)).toContain('⬜️ Зарядка')
   })
@@ -171,7 +171,7 @@ describe('отметки', () => {
     await bot.handleUpdate(tap(`t:${check.id}`))
 
     const answer = calls.find((c) => c.method === 'answerCallbackQuery')
-    expect(answer?.payload.text).toBe('Трекер больше не активен')
+    expect(answer?.payload.text).toBe('Бұл трекер енді белсенді емес')
     expect(calls.some((c) => c.method === 'editMessageText')).toBe(true)
     const rows = await db.q(`select 1 from entries where tracker_id = $1`, [check.id])
     expect(rows.length).toBe(0)
@@ -183,7 +183,7 @@ describe('отметки', () => {
     await archiveTracker(db, pages.id)
     await bot.handleUpdate(message('5'))
 
-    expect(calls.some((c) => String(c.payload.text ?? '').includes('Трекер больше не активен'))).toBe(true)
+    expect(calls.some((c) => String(c.payload.text ?? '').includes('Бұл трекер енді белсенді емес'))).toBe(true)
     const rows = await db.q(`select 1 from entries where tracker_id = $1`, [pages.id])
     expect(rows.length).toBe(0)
   })
@@ -199,7 +199,7 @@ describe('отметки', () => {
     await bot.handleUpdate(message('0'))
     rows = await db.q(`select 1 from entries where tracker_id = $1`, [pages.id])
     expect(rows.length).toBe(0)
-    expect(calls.some((c) => String(c.payload.text ?? '').includes('снята'))).toBe(true)
+    expect(calls.some((c) => String(c.payload.text ?? '').includes('алынды'))).toBe(true)
   })
 
   it('/name меняет имя, а при заблокированном имени — отказывает', async () => {
@@ -212,7 +212,7 @@ describe('отметки', () => {
     calls.length = 0
     await bot.handleUpdate(message('/name Другое Имя'))
     expect((await getUser(db, 7))?.display_name).toBe('Админское Имя')
-    expect(calls.at(-1)?.payload.text).toContain('администратор')
+    expect(calls.at(-1)?.payload.text).toContain('әкімші')
   })
 })
 
@@ -225,7 +225,7 @@ describe('групповая сводка', () => {
 
     await bot.handleUpdate(tap('s:g'))
     const text = String(calls.find((c) => c.method === 'editMessageText')?.payload.text)
-    expect(text).toBe('Вы пока не состоите ни в одной группе.')
+    expect(text).toBe('Сіз әзірге ешбір топта емессіз.')
   })
 
   it('в одной группе — сводка с «Вы» и процентами', async () => {
@@ -242,7 +242,7 @@ describe('групповая сводка', () => {
 
     await h.bot.handleUpdate(tap('s:g'))
     const text = String(h.calls.find((c) => c.method === 'editMessageText')?.payload.text)
-    expect(text).toContain('Вы')
+    expect(text).toContain('Сіз')
     expect(text).toMatch(/\d+%/)
   })
 })

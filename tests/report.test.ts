@@ -53,7 +53,7 @@ describe('sendReminders', () => {
 
     expect(await sendReminders(db, sender, TODAY)).toBe(1)
     expect(sent.map((s) => s.chatId)).toEqual([2])
-    expect(sent[0].text).toContain('Осталось на сегодня')
+    expect(sent[0].text).toContain('Бүгінге')
   })
 
   it('повторный запуск в тот же день не шлёт второе сообщение', async () => {
@@ -87,7 +87,7 @@ describe('sendWeekly', () => {
 
     expect(await sendWeekly(db, sender, TODAY)).toBe(1)
     expect(sent[0].chatId).toBe(-100500)
-    expect(sent[0].text).toContain('итоги недели')
+    expect(sent[0].text).toContain('қорытындысы')
     expect(await sendWeekly(db, sender, TODAY)).toBe(0)
   })
 
@@ -119,7 +119,7 @@ describe('weeklyText', () => {
     await toggleCheck(db, 1, charge.id, '2026-09-08')
     const text = weeklyText(await groupReport(db, g.id, '2026-09-07', TODAY))
     expect(text).toContain('Айгуль')
-    expect(text).toContain('Группа в среднем')
+    expect(text).toContain('Топ бойынша орташа')
   })
 
   it('экранирует HTML в названии группы и именах участников', async () => {

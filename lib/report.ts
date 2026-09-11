@@ -24,8 +24,7 @@ export async function claimSend(
 }
 
 export function reminderText(count: number): string {
-  const word = count === 1 ? 'трекер' : count < 5 ? 'трекера' : 'трекеров'
-  return `Осталось на сегодня: ${count} ${word}. Отметьте, пока день не кончился.`
+  return `Бүгінге ${count} трекер қалды. Күн бітпей тұрып белгілеңіз.`
 }
 
 export async function sendReminders(db: Db, sender: Sender, today: string): Promise<number> {
@@ -73,7 +72,7 @@ export function weeklyText(report: GroupReport): string {
 
   const numbers = report.trackers
     .filter((t) => t.kind === 'number' && t.sum > 0)
-    .map((t) => `${esc(t.title)}: ${num(t.sum)} ${esc(t.unit ?? '')} за неделю`)
+    .map((t) => `${esc(t.title)}: аптада ${num(t.sum)} ${esc(t.unit ?? '')}`)
 
   // Тело <pre> режем отдельно от остального: если воскресный отчёт разросся
   // (много участников), обрезка не должна оставить незакрытый тег — это единственная
@@ -82,14 +81,14 @@ export function weeklyText(report: GroupReport): string {
   // в общий лимит, так что финальный clip — лишь подстраховка снаружи <pre>.
   const pre = `<pre>${clip(rows.join('\n'), 2800)}</pre>`
   const restLines = [
-    `Группа в среднем: ${report.percent}%`,
+    `Топ бойынша орташа: ${report.percent}%`,
     report.trackers.map((t) => `${esc(t.title)} ${t.percent}%`).join(' · '),
     ...numbers,
   ].filter(Boolean)
   const rest = clip(restLines.join('\n'), 1000)
 
   return clip([
-    `🏁 <b>${esc(report.title)}</b> · итоги недели ${formatRange(report.from, report.to)}`,
+    `🏁 <b>${esc(report.title)}</b> · ${formatRange(report.from, report.to)} аптасының қорытындысы`,
     pre,
     rest,
   ].filter(Boolean).join('\n'))

@@ -1,5 +1,6 @@
 function req(name: string): string {
-  const v = process.env[name]
+  // Пробелы по краям — типичный артефакт вставки в веб-форму; Telegram из-за них отвергает URL.
+  const v = process.env[name]?.trim()
   if (!v) throw new Error(`Не задана переменная окружения ${name}`)
   return v
 }

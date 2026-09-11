@@ -63,18 +63,22 @@ export async function listGroups(
   return rows.map(toGroup)
 }
 
+// Возвращает true, только когда членство было создано впервые (INSERT реально
+// вставил строку) — вызывающий код на это опирается, чтобы уведомить о новом
+// доступе только один раз, а не при каждом повторном тапе по уже включённой группе.
 export async function setMembership(
   db: Db, userId: number, groupId: number, on: boolean,
-): Promise<void> {
+): Promise<boolean> {
   if (on) {
-    await db.q(
+    const rows = await db.q(
       `insert into memberships (user_id, group_id) values ($1, $2)
-       on conflict do nothing`,
+       on conflict do nothing returning user_id`,
       [userId, groupId],
     )
-  } else {
-    await db.q(`delete from memberships where user_id = $1 and group_id = $2`, [userId, groupId])
+    return rows.length > 0
   }
+  await db.q(`delete from memberships where user_id = $1 and group_id = $2`, [userId, groupId])
+  return false
 }
 
 export async function userGroups(db: Db, userId: number): Promise<Group[]> {

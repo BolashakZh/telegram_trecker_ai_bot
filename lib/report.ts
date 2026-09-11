@@ -1,5 +1,6 @@
 import type { InlineKeyboardMarkup } from 'grammy/types'
 import type { Db } from './db.ts'
+import { today } from './db.ts'
 import { dayState } from './entries.ts'
 import { listGroups } from './groups.ts'
 import { groupReport, usersWithUnfinished, type GroupReport } from './group-stats.ts'
@@ -45,6 +46,20 @@ export async function sendReminders(db: Db, sender: Sender, today: string): Prom
     }
   }
   return sent
+}
+
+export function accessGrantedText(groupTitle: string): string {
+  return `Сізге рұқсат берілді — «${esc(groupTitle)}» тобы. Бүгінгі трекерлеріңіз:`
+}
+
+export async function sendAccessGranted(
+  db: Db, sender: Sender, userId: number, groupTitle: string,
+): Promise<void> {
+  const day = await today(db)
+  const trackers = await activeTrackersForUser(db, userId)
+  const state = await dayState(db, userId, day)
+  const { keyboard } = mainScreen({ day, trackers, state })
+  await sender.send(userId, accessGrantedText(groupTitle), keyboard)
 }
 
 export function weeklyText(report: GroupReport): string {

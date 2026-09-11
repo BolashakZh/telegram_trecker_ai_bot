@@ -49,6 +49,63 @@ describe('usersAction', () => {
     await expect(usersAction(db, { action: 'rename', userId: 7, displayName: '!' }))
       .rejects.toBeInstanceOf(BadRequest)
   })
+
+  it('первое назначение в группу вызывает onGranted с этой группой', async () => {
+    const db = await testDb()
+    await upsertFromTelegram(db, { id: 7, first_name: 'Айгуль' })
+    const { groups } = await groupsAction(db, { action: 'create', title: 'Утро' })
+    const gid = groups[0].id
+    const granted: { userId: number; group: { id: number } }[] = []
+
+    await usersAction(db, { action: 'membership', userId: 7, groupId: gid, on: true }, {
+      onGranted: async (userId, group) => { granted.push({ userId, group }) },
+    })
+
+    expect(granted).toHaveLength(1)
+    expect(granted[0]).toMatchObject({ userId: 7, group: { id: gid, title: 'Утро' } })
+  })
+
+  it('повторный тап по уже включённому членству хук не вызывает', async () => {
+    const db = await testDb()
+    await upsertFromTelegram(db, { id: 7, first_name: 'Айгуль' })
+    const { groups } = await groupsAction(db, { action: 'create', title: 'Утро' })
+    const gid = groups[0].id
+    const granted: unknown[] = []
+    const hooks = { onGranted: async () => { granted.push(1) } }
+
+    await usersAction(db, { action: 'membership', userId: 7, groupId: gid, on: true }, hooks)
+    await usersAction(db, { action: 'membership', userId: 7, groupId: gid, on: true }, hooks)
+
+    expect(granted).toHaveLength(1)
+  })
+
+  it('снятие из группы хук не вызывает', async () => {
+    const db = await testDb()
+    await upsertFromTelegram(db, { id: 7, first_name: 'Айгуль' })
+    const { groups } = await groupsAction(db, { action: 'create', title: 'Утро' })
+    const gid = groups[0].id
+    const granted: unknown[] = []
+    const hooks = { onGranted: async () => { granted.push(1) } }
+
+    await usersAction(db, { action: 'membership', userId: 7, groupId: gid, on: true }, hooks)
+    granted.length = 0
+    await usersAction(db, { action: 'membership', userId: 7, groupId: gid, on: false }, hooks)
+
+    expect(granted).toHaveLength(0)
+  })
+
+  it('ошибка хука не роняет usersAction', async () => {
+    const db = await testDb()
+    await upsertFromTelegram(db, { id: 7, first_name: 'Айгуль' })
+    const { groups } = await groupsAction(db, { action: 'create', title: 'Утро' })
+    const gid = groups[0].id
+
+    const users = await usersAction(db, { action: 'membership', userId: 7, groupId: gid, on: true }, {
+      onGranted: async () => { throw new Error('bot was blocked by the user') },
+    })
+
+    expect(users[0].group_ids).toEqual([gid])
+  })
 })
 
 describe('trackersAction', () => {

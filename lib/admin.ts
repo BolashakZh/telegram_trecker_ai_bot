@@ -23,7 +23,11 @@ export async function bootstrap(db: Db): Promise<Bootstrap> {
   return { groups, trackers, users }
 }
 
-export async function usersAction(db: Db, body: unknown): Promise<Bootstrap['users']> {
+export async function usersAction(
+  db: Db,
+  body: unknown,
+  hooks?: { onGranted?: (userId: number, group: Group) => Promise<void> },
+): Promise<Bootstrap['users']> {
   const o = (body ?? {}) as Record<string, unknown>
   const userId = id(o.userId)
 
@@ -36,9 +40,23 @@ export async function usersAction(db: Db, body: unknown): Promise<Bootstrap['use
     case 'unlockName':
       await unlockName(db, userId)
       break
-    case 'membership':
-      await setMembership(db, userId, id(o.groupId), flag(o.on))
+    case 'membership': {
+      const groupId = id(o.groupId)
+      const granted = await setMembership(db, userId, groupId, flag(o.on))
+      if (granted) {
+        const group = (await listGroups(db)).find((g) => g.id === groupId)
+        if (group) {
+          try {
+            await hooks?.onGranted?.(userId, group)
+          } catch (err) {
+            // Человек мог заблокировать бота или ещё не написать ему /start —
+            // это не повод возвращать админке 500 за успешно выданный доступ.
+            console.error('usersAction: onGranted hook failed', err)
+          }
+        }
+      }
       break
+    }
     default:
       throw new BadRequest('Неизвестное действие')
   }

@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
+import type { InlineKeyboardMarkup } from 'grammy/types'
 import { toggleCheck } from '../lib/entries.ts'
 import { bindChat, createGroup, setMembership } from '../lib/groups.ts'
-import { claimSend, sendReminders, sendWeekly, weeklyText } from '../lib/report.ts'
+import { claimSend, sendAccessGranted, sendReminders, sendWeekly, weeklyText } from '../lib/report.ts'
 import { createTracker, setGroupTracker } from '../lib/trackers.ts'
 import { upsertFromTelegram } from '../lib/users.ts'
 import { groupReport } from '../lib/group-stats.ts'
@@ -25,10 +26,14 @@ async function fixture() {
 }
 
 function recorder() {
-  const sent: { chatId: number; text: string }[] = []
+  const sent: { chatId: number; text: string; keyboard?: InlineKeyboardMarkup }[] = []
   return {
     sent,
-    sender: { send: async (chatId: number, text: string) => { sent.push({ chatId, text }) } },
+    sender: {
+      send: async (chatId: number, text: string, keyboard?: InlineKeyboardMarkup) => {
+        sent.push({ chatId, text, keyboard })
+      },
+    },
   }
 }
 
@@ -91,6 +96,20 @@ describe('sendWeekly', () => {
     const { sent, sender } = recorder()
     expect(await sendWeekly(db, sender, TODAY)).toBe(0)
     expect(sent).toEqual([])
+  })
+})
+
+describe('sendAccessGranted', () => {
+  it('шлёт сообщение с названием группы и клавиатурой главного экрана', async () => {
+    const { db } = await fixture()
+    const { sent, sender } = recorder()
+
+    await sendAccessGranted(db, sender, 1, 'Утро')
+
+    expect(sent).toHaveLength(1)
+    expect(sent[0].chatId).toBe(1)
+    expect(sent[0].text).toContain('Утро')
+    expect(sent[0].keyboard?.inline_keyboard.flat().map((b) => b.text)).toContain('⬜️ Зарядка')
   })
 })
 

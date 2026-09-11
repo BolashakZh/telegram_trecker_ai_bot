@@ -47,8 +47,12 @@ export async function sendReminders(db: Db, sender: Sender, today: string): Prom
   return sent
 }
 
-export function accessGrantedText(groupTitle: string): string {
-  return `Сізге рұқсат берілді — «${esc(groupTitle)}» тобы. Бүгінгі трекерлеріңіз:`
+export function accessGrantedText(groupTitle: string, hasTrackers = true): string {
+  const head = `Сізге рұқсат берілді — «${esc(groupTitle)}» тобы.`
+  // Группу могли создать раньше трекеров: обещать «ваши трекеры» с пустой клавиатурой нельзя.
+  return hasTrackers
+    ? `${head} Бүгінгі трекерлеріңіз:`
+    : `${head} Трекерлерді әкімші қосқан соң, олар осында пайда болады.`
 }
 
 export async function sendAccessGranted(
@@ -58,7 +62,7 @@ export async function sendAccessGranted(
   const trackers = await activeTrackersForUser(db, userId)
   const state = await dayState(db, userId, day)
   const { keyboard } = mainScreen({ day, trackers, state })
-  await sender.send(userId, accessGrantedText(groupTitle), keyboard)
+  await sender.send(userId, accessGrantedText(groupTitle, trackers.length > 0), keyboard)
 }
 
 export function weeklyText(report: GroupReport): string {

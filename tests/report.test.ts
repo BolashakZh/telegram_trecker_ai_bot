@@ -110,6 +110,21 @@ describe('sendAccessGranted', () => {
     expect(sent[0].chatId).toBe(1)
     expect(sent[0].text).toContain('Утро')
     expect(sent[0].keyboard?.inline_keyboard.flat().map((b) => b.text)).toContain('⬜️ Зарядка')
+    expect(sent[0].text).toContain('Бүгінгі трекерлеріңіз')
+  })
+
+  it('без трекеров объясняет, что они появятся позже, а не обещает пустой список', async () => {
+    const db = await testDb()
+    await upsertFromTelegram(db, { id: 5, first_name: 'Жаңа' })
+    const g = await createGroup(db, 'Кеш')
+    await setMembership(db, 5, g.id, true)
+    const { sent, sender } = recorder()
+
+    await sendAccessGranted(db, sender, 5, 'Кеш')
+
+    expect(sent[0].text).toContain('Кеш')
+    expect(sent[0].text).not.toContain('Бүгінгі трекерлеріңіз')
+    expect(sent[0].text).toContain('әкімші қосқан соң')
   })
 })
 
